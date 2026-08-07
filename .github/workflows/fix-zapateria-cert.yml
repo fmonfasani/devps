@@ -1,0 +1,46 @@
+name: Fix zapateria.webshooks.com cert (drop argfy.com)
+
+# One-off, manual only. The zapateria.webshooks.com certificate bundled 7
+# domains together; renewal was failing because api.argfy.com, argfy.com,
+# and www.argfy.com no longer have DNS records (that project is
+# decommissioned — confirmed with the repo owner), and a multi-SAN cert
+# fails to renew entirely if even one covered domain can't be validated.
+# This reissues the same cert-name with only the 4 domains that are still
+# live, so zapateria/electronica/forrajeria/tienda.webshooks.com can renew
+# normally again. Safe to delete this workflow after it's run once.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  fix-cert:
+    name: Reissue zapateria.webshooks.com without argfy.com
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reissue cert over SSH
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            echo "===== current cert domains ====="
+            certbot certificates --cert-name zapateria.webshooks.com
+
+            echo "===== reissuing with argfy.com domains dropped ====="
+            certbot certonly --nginx --cert-name zapateria.webshooks.com \
+              -d zapateria.webshooks.com \
+              -d electronica.webshooks.com \
+              -d forrajeria.webshooks.com \
+              -d tienda.webshooks.com \
+              --non-interactive --agree-tos \
+              --deploy-hook "systemctl reload nginx"
+
+            echo "===== cert domains after fix ====="
+            certbot certificates --cert-name zapateria.webshooks.com
