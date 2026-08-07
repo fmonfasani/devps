@@ -1,0 +1,34 @@
+name: Renew TLS certs (certbot)
+
+# Manual only. Runs `certbot renew` on the VPS — safe to run any time:
+# certbot only actually renews certs within its renewal window (~30 days
+# of expiry), everything else is a no-op. Reloads nginx only if something
+# renewed. Prints `certbot certificates` at the end so the run log always
+# shows current expiry dates for every cert on the box, not just the ones
+# that were due.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  renew:
+    name: certbot renew
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run certbot renew over SSH
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            echo "===== certbot renew ====="
+            certbot renew --non-interactive --post-hook "systemctl reload nginx"
+            echo "===== certificates after renew ====="
+            certbot certificates
