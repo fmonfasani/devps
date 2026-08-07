@@ -1,5 +1,7 @@
 """Request/response schemas."""
 
+from typing import Literal
+
 from pydantic import BaseModel, model_validator
 
 
@@ -25,3 +27,15 @@ class DeployRequest(BaseModel):
 class AdoptRequest(BaseModel):
     container_name: str
     domain: str | None = None
+
+
+class MigrationStepRequest(BaseModel):
+    """Manual stamp for a migration step docs/MIGRATION.md's runbook can't be
+    auto-detected for — mainly `decommissioned`, since the agent has no way
+    to know when the OLD (e.g. Coolify-managed) copy was actually turned
+    off. `adopted`/`paralleled`/`cutover` are usually stamped automatically
+    by `adopt`/`deploy`, but this endpoint can set any of them by hand too,
+    for the cases the heuristics don't fit."""
+
+    step: Literal["adopted", "paralleled", "cutover", "decommissioned"]
+    notes: str | None = None

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}devps — migrations{% endblock %}
+{% block content %}
+<h1>Migrations</h1>
+<p class="muted">The live version of docs/MIGRATION.md's table — one row per project being moved off Coolify (or anywhere else), stamped automatically by <code>adopt</code>/<code>deploy</code> where possible.</p>
+{% if not migrations %}
+<p class="muted">No migrations tracked yet — <code>hzploy adopt</code> a project to start one.</p>
+{% else %}
+<div class="card">
+<table>
+<thead>
+<tr><th>Project</th><th>Source</th><th>Adopted</th><th>Paralleled</th><th>Cutover</th><th>Decommissioned</th></tr>
+</thead>
+<tbody>
+{% for m in migrations %}
+<tr>
+  <td><a href="/dashboard/projects/{{ m.project_name }}">{{ m.project_name }}</a></td>
+  <td>{{ m.source_description or "—" }}</td>
+  <td>{{ m.adopted_at or "—" }}</td>
+  <td>{{ m.paralleled_at or "—" }}</td>
+  <td>{{ m.cutover_at or "—" }}</td>
+  <td>{{ m.decommissioned_at or "—" }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

@@ -26,6 +26,33 @@ CREATE TABLE IF NOT EXISTS project_ports (
     container_port INTEGER NOT NULL,
     PRIMARY KEY (project_name, service)
 );
+
+-- Append-only. Never updated or deleted except by the project's own
+-- ON DELETE CASCADE — this is the history a status snapshot can't give you
+-- (e.g. "this deploy failed twice before it worked").
+CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_name TEXT NOT NULL REFERENCES projects(name) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    detail TEXT,
+    success INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_events_project_created
+    ON events (project_name, created_at);
+
+-- One row per project being migrated off Coolify (or anything else) — the
+-- live version of the table in docs/MIGRATION.md. NULL timestamps mean
+-- that step hasn't happened yet.
+CREATE TABLE IF NOT EXISTS migrations (
+    project_name TEXT PRIMARY KEY REFERENCES projects(name) ON DELETE CASCADE,
+    source_description TEXT,
+    adopted_at TEXT,
+    paralleled_at TEXT,
+    cutover_at TEXT,
+    decommissioned_at TEXT,
+    notes TEXT
+);
 """
 
 

@@ -50,4 +50,25 @@ escucha en `127.0.0.1:9400` — confirmado libre en el mismo audit.
 
 SQLite (`/opt/devps/data/registry.db`), un solo escritor (el agente),
 nada de un servicio de base de datos aparte para algo que gestiona a los
-demás.
+demás. Además de `projects`/`project_ports`, guarda:
+
+- **`events`** — log append-only de cada acción (`deploy`, `adopt`,
+  `restart`, instalación de vhost), con éxito/fracaso y detalle. Es lo que
+  le da historial real al dashboard — un `GET /projects/{name}` solo
+  muestra el estado actual, no que un deploy falló dos veces antes de
+  funcionar.
+- **`migrations`** — un renglón por proyecto en proceso de salir de
+  Coolify (o de donde sea), con timestamps por paso
+  (`adopted`/`paralleled`/`cutover`/`decommissioned`). `adopt` y `deploy`
+  los estampan solos cuando corresponde; `decommissioned` es manual,
+  porque el agente no tiene visibilidad de lo que pasa dentro de Coolify.
+
+## El dashboard
+
+Mismo proceso FastAPI, servido en `/dashboard` — no hay build de frontend
+ni contenedor aparte. Auth por cookie de sesión firmada con el mismo
+`DEVPS_TOKEN` (login = pegar el token una vez en un form, no un header a
+mano en cada visita). La cookie se emite sin `Secure` (`https_only=False`)
+porque hoy el agente solo es alcanzable por túnel SSH sobre HTTP plano —
+hay que pasar a `True` en `main.py` el día que haya un dominio HTTPS
+público para el agente.

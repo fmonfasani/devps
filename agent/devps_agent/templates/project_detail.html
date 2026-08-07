@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}devps — {{ project.name }}{% endblock %}
+{% block content %}
+<p><a href="/dashboard">&larr; Projects</a></p>
+<h1>{{ project.name }}
+  <span class="badge badge-{{ project.managed_by }}">{{ project.managed_by }}</span>
+</h1>
+
+<div class="card">
+  <table>
+    <tr><th>Status</th><td>{{ project.status }}</td></tr>
+    <tr><th>Domain</th><td>{{ project.domain or "—" }}</td></tr>
+    <tr><th>Repo</th><td>{{ project.repo_url or "—" }}</td></tr>
+    <tr><th>Ref / SHA</th><td>{{ project.git_ref or "—" }} / {{ project.git_sha or "—" }}</td></tr>
+    <tr><th>Ports</th><td>
+      {% for port in project.ports %}{{ port.service }}: {{ port.host_port }} &rarr; {{ port.container_port }}<br>{% endfor %}
+      {% if not project.ports %}—{% endif %}
+    </td></tr>
+    <tr><th>Created</th><td>{{ project.created_at }}</td></tr>
+    <tr><th>Updated</th><td>{{ project.updated_at }}</td></tr>
+  </table>
+</div>
+
+{% if migration %}
+<div class="card">
+  <h3>Migration</h3>
+  <table>
+    <tr><th>Source</th><td>{{ migration.source_description or "—" }}</td></tr>
+    <tr><th>Adopted</th><td>{{ migration.adopted_at or "—" }}</td></tr>
+    <tr><th>Paralleled</th><td>{{ migration.paralleled_at or "—" }}</td></tr>
+    <tr><th>Cutover</th><td>{{ migration.cutover_at or "—" }}</td></tr>
+    <tr><th>Decommissioned</th><td>{{ migration.decommissioned_at or "—" }}</td></tr>
+    {% if migration.notes %}<tr><th>Notes</th><td>{{ migration.notes }}</td></tr>{% endif %}
+  </table>
+</div>
+{% endif %}
+
+<div class="card">
+  <h3>Event history</h3>
+  {% if not events %}
+  <p class="muted">No events recorded yet.</p>
+  {% else %}
+  <ul class="timeline">
+    {% for e in events %}
+    <li>
+      <span class="ts">{{ e.created_at }}</span>
+      <span class="badge badge-{{ 'ok' if e.success else 'fail' }}">{{ e.kind }}</span>
+      {% if e.detail %}<span class="muted">{{ e.detail }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+
+{% if project.managed_by == "devps" %}
+<div class="card">
+  <h3>Recent logs (last 200 lines)</h3>
+  <pre class="logs">{{ logs or "(empty)" }}</pre>
+</div>
+{% endif %}
+{% endblock %}
