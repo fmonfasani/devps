@@ -1,0 +1,103 @@
+name: VPS Audit (read-only)
+
+# Manual only, on purpose — this never runs unattended. Dumps a read-only
+# inventory of the shared Hetzner VPS (docker, networks, ports, proxies,
+# certs, firewall) into the job log so it can be reviewed without an
+# interactive SSH session. Writes nothing, changes nothing, never prints
+# secret VALUES (only names/paths/existence).
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Audit VPS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run read-only audit over SSH
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
+          script_stop: false
+          script: |
+            section() { printf '\n===== %s =====\n' "$1"; }
+
+            section "System"
+            uname -a
+            (lsb_release -a 2>/dev/null || cat /etc/os-release) | grep -iE 'description|pretty_name'
+            uptime
+            hostname -I
+
+            section "Disk"
+            df -h | grep -vE '^tmpfs|^udev'
+
+            section "Memory"
+            free -h
+
+            section "Firewall (ufw)"
+            ufw status verbose 2>/dev/null || echo "ufw not active/installed"
+
+            section "All listening ports"
+            ss -tlnp 2>/dev/null || sudo ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null
+
+            section "Docker + compose versions"
+            docker --version
+            docker compose version 2>/dev/null
+
+            section "Docker containers (all, incl. stopped)"
+            docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
+
+            section "Docker compose projects (docker compose ls)"
+            docker compose ls -a 2>/dev/null || echo "not supported by this docker compose version"
+
+            section "Docker networks"
+            docker network ls
+
+            section "Docker volumes"
+            docker volume ls
+
+            section "Docker resource usage (live snapshot)"
+            docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}' 2>/dev/null
+
+            section "/opt contents (top-level project dirs)"
+            ls -la /opt/ 2>/dev/null
+
+            section "nginx"
+            (command -v nginx && nginx -v) 2>&1 || echo "nginx not on PATH"
+            ls -la /etc/nginx/sites-enabled/ 2>/dev/null
+            for f in /etc/nginx/sites-enabled/*; do
+              [ -f "$f" ] || continue
+              echo "--- $f ---"
+              cat "$f"
+            done
+
+            section "Caddy"
+            (command -v caddy && caddy version) 2>&1 || echo "caddy not on PATH"
+            systemctl is-active caddy 2>/dev/null || echo "caddy service not found"
+
+            section "Traefik containers"
+            docker ps -a --filter "name=traefik" --format '{{.Names}} {{.Image}} {{.Status}}' || echo "none"
+
+            section "Coolify"
+            docker ps -a --filter "name=coolify" --format '{{.Names}} {{.Image}} {{.Status}}' || echo "none"
+            [ -d /data/coolify ] && echo "/data/coolify exists" || echo "/data/coolify not present"
+
+            section "TLS certificates (certbot)"
+            certbot certificates 2>/dev/null || echo "certbot not installed"
+
+            section "Relevant systemd services"
+            systemctl list-units --type=service --state=running --no-pager 2>/dev/null \
+              | grep -iE 'docker|nginx|caddy|coolify|waseller|wapsell|pipaas|skillos|traefik' || echo "none matched"
+
+            section "root crontab / cron.d"
+            crontab -l 2>/dev/null || echo "no crontab for current user"
+            ls -la /etc/cron.d/ 2>/dev/null
+
+            section "Public IP(s) reachable from this host"
+            curl -s -4 --max-time 3 ifconfig.me 2>/dev/null; echo
