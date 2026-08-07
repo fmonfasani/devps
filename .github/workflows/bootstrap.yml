@@ -1,0 +1,34 @@
+name: Bootstrap agent on VPS
+
+# Manual only. Installs/updates the devps agent as a systemd service on the
+# VPS via infra/scripts/bootstrap.sh — idempotent, touches nothing else
+# already on the box. Reuses the same SSH secrets as audit.yml.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    name: Bootstrap devps-agent
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run bootstrap.sh over SSH
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            if [ ! -d /opt/devps/repo/.git ]; then
+              git clone https://github.com/fmonfasani/devps.git /opt/devps/repo
+            fi
+            git -C /opt/devps/repo fetch origin main
+            git -C /opt/devps/repo checkout main
+            git -C /opt/devps/repo reset --hard origin/main
+            bash /opt/devps/repo/infra/scripts/bootstrap.sh
