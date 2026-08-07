@@ -1,0 +1,84 @@
+name: devps deploy (reusable)
+
+# Called by other repos' tiny deploy.yml (see docs/ONBOARDING.md), or
+# directly within this repo for self-tests. SSHes into the VPS and calls
+# the devps agent's local API — the agent (not this workflow) owns port
+# allocation, the docker build, and the nginx/certbot steps.
+
+on:
+  workflow_call:
+    inputs:
+      project_name:
+        required: true
+        type: string
+      repo_url:
+        required: true
+        type: string
+      git_ref:
+        required: false
+        type: string
+        default: main
+      domain:
+        required: false
+        type: string
+      services:
+        description: 'JSON object of service:containerPort, e.g. {"web":3000}'
+        required: true
+        type: string
+      primary_service:
+        required: false
+        type: string
+    secrets:
+      HETZNER_HOST:
+        required: true
+      HETZNER_USER:
+        required: true
+      HETZNER_SSH_KEY:
+        required: true
+      HETZNER_SSH_PORT:
+        required: false
+      DEVPS_TOKEN:
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # As with the wapsell/ailearning deploy workflows: every value that
+      # could carry untrusted content goes through env:/envs:, never spliced
+      # directly into the `script:` text (GH Actions script-injection,
+      # CWE-78 — a real SonarCloud finding on the sibling repos, not a
+      # preemptive guess).
+      - name: Call devps agent over SSH
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        env:
+          PROJECT_NAME: ${{ inputs.project_name }}
+          REPO_URL: ${{ inputs.repo_url }}
+          GIT_REF: ${{ inputs.git_ref }}
+          DOMAIN: ${{ inputs.domain }}
+          SERVICES_JSON: ${{ inputs.services }}
+          PRIMARY_SERVICE: ${{ inputs.primary_service }}
+          DEVPS_TOKEN: ${{ secrets.DEVPS_TOKEN }}
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
+          script_stop: true
+          envs: PROJECT_NAME,REPO_URL,GIT_REF,DOMAIN,SERVICES_JSON,PRIMARY_SERVICE,DEVPS_TOKEN
+          script: |
+            set -euo pipefail
+            BODY=$(python3 -c "
+            import json, os
+            print(json.dumps({
+                'repo_url': os.environ['REPO_URL'],
+                'git_ref': os.environ['GIT_REF'],
+                'domain': os.environ.get('DOMAIN') or None,
+                'services': json.loads(os.environ['SERVICES_JSON']),
+                'primary_service': os.environ.get('PRIMARY_SERVICE') or None,
+            }))
+            ")
+            curl -sS -f -X POST "http://127.0.0.1:9400/projects/${PROJECT_NAME}/deploy" \
+              -H "Authorization: Bearer ${DEVPS_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "${BODY}"

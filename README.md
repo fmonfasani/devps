@@ -6,15 +6,23 @@ hand-picked port, or a new nginx vhost every time.
 
 ## Status
 
-**Phase 0 (current):** read-only audit of the VPS — see
-[`.github/workflows/audit.yml`](.github/workflows/audit.yml) and
-[`docs/AUDIT.md`](docs/AUDIT.md) once it's run.
+**Phase 0 — done:** read-only audit of the VPS.
+[`docs/AUDIT.md`](docs/AUDIT.md) has the findings (what Coolify manages,
+what's hand-managed, ports already in use, the ones `devps` claims for
+itself).
 
-**Phase 1 (next):** the actual control-plane agent (FastAPI) + a shared
-reverse proxy (Traefik) so any project can be onboarded by calling one API,
-instead of hand-writing a `docker-compose.coexist.yml` + deploy script +
-GitHub Actions workflow per repo (see `fmonfasani/wapsell-saas` and
-`fmonfasani/ailearning` for what that looked like before this existed).
+**Phase 1 — this repo, pending bootstrap on the VPS:** the control-plane
+agent (FastAPI, runs as a systemd service directly on the host — see
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for why it's not
+containerized), a SQLite registry, port allocation, nginx vhost + certbot
+automation, a `hzploy` CLI, and a reusable GitHub Actions workflow other
+repos call to deploy. See [`docs/ONBOARDING.md`](docs/ONBOARDING.md) to
+bring a project in, and [`docs/MIGRATION.md`](docs/MIGRATION.md) for the
+site-by-site plan to move things currently on Coolify over, with zero
+downtime and no big-bang cutover.
+
+**Phase 2 (next):** a dashboard over the same registry the agent already
+maintains.
 
 ## Why this exists
 
