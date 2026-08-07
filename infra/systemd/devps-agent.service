@@ -1,0 +1,24 @@
+[Unit]
+Description=devps control-plane agent
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+EnvironmentFile=/opt/devps/agent.env
+WorkingDirectory=/opt/devps/repo/agent
+ExecStart=/opt/devps/venv/bin/uvicorn devps_agent.main:app --host 127.0.0.1 --port 9400
+Restart=always
+RestartSec=3
+# Needs root: manages other projects' Docker containers, writes nginx
+# vhosts under /etc/nginx, and runs certbot/systemctl reload. All of that
+# already ran as root by hand before this existed (see docs/AUDIT.md) —
+# this doesn't raise the privilege level of what's on the box, it just
+# centralizes who invokes it.
+User=root
+
+# No network/PID namespace isolation options here — the whole point of this
+# service is to reach the host's docker daemon and nginx directly, not to be
+# sandboxed away from them.
+[Install]
+WantedBy=multi-user.target
