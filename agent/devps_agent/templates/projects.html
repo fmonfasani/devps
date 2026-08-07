@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}devps — projects{% endblock %}
+{% block content %}
+<h1>Projects</h1>
+{% if not projects %}
+<p class="muted">No projects registered yet — deploy or adopt one to see it here.</p>
+{% else %}
+<div class="card">
+<table>
+<thead>
+<tr><th>Name</th><th>Managed by</th><th>Status</th><th>Domain</th><th>Ports</th><th>Last event</th></tr>
+</thead>
+<tbody>
+{% for p in projects %}
+<tr>
+  <td><a href="/dashboard/projects/{{ p.name }}">{{ p.name }}</a></td>
+  <td><span class="badge badge-{{ p.managed_by }}">{{ p.managed_by }}</span></td>
+  <td>{{ p.status }}</td>
+  <td>{{ p.domain or "—" }}</td>
+  <td>{% for port in p.ports %}{{ port.service }}:{{ port.host_port }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+  <td>
+    {% if p.last_event %}
+      <span class="badge badge-{{ 'ok' if p.last_event.success else 'fail' }}">{{ p.last_event.kind }}</span>
+      <span class="muted">{{ p.last_event.created_at }}</span>
+    {% else %}<span class="muted">—</span>{% endif %}
+  </td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

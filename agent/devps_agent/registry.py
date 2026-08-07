@@ -60,20 +60,126 @@ def _ports_for(conn, name: str) -> list[dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
+def _last_event_for(conn, name: str) -> dict[str, Any] | None:
+    row = conn.execute(
+        """SELECT kind, success, created_at FROM events
+           WHERE project_name = ? ORDER BY id DESC LIMIT 1""",
+        (name,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
 def get_project(name: str) -> dict[str, Any] | None:
     with connect() as conn:
         row = conn.execute("SELECT * FROM projects WHERE name = ?", (name,)).fetchone()
         if not row:
             return None
-        return {**dict(row), "ports": _ports_for(conn, name)}
+        return {
+            **dict(row),
+            "ports": _ports_for(conn, name),
+            "last_event": _last_event_for(conn, name),
+        }
 
 
 def list_projects() -> list[dict[str, Any]]:
     with connect() as conn:
         rows = conn.execute("SELECT * FROM projects ORDER BY name").fetchall()
-        return [{**dict(row), "ports": _ports_for(conn, row["name"])} for row in rows]
+        return [
+            {
+                **dict(row),
+                "ports": _ports_for(conn, row["name"]),
+                "last_event": _last_event_for(conn, row["name"]),
+            }
+            for row in rows
+        ]
 
 
 def delete_project(name: str) -> None:
     with connect() as conn:
         conn.execute("DELETE FROM projects WHERE name = ?", (name,))
+
+
+# --- events -----------------------------------------------------------------
+
+
+def log_event(project_name: str, kind: str, detail: str | None, success: bool) -> None:
+    with connect() as conn:
+        conn.execute(
+            """INSERT INTO events (project_name, kind, detail, success, created_at)
+               VALUES (?, ?, ?, ?, ?)""",
+            (project_name, kind, detail, int(success), _now()),
+        )
+
+
+def get_events(project_name: str, limit: int = 100) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            """SELECT id, kind, detail, success, created_at FROM events
+               WHERE project_name = ? ORDER BY id DESC LIMIT ?""",
+            (project_name, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def list_events(limit: int = 200) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            """SELECT id, project_name, kind, detail, success, created_at FROM events
+               ORDER BY id DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+# --- migrations ---------------------------------------------------------
+
+
+_MIGRATION_STEP_COLUMNS = {
+    "adopted": "adopted_at",
+    "paralleled": "paralleled_at",
+    "cutover": "cutover_at",
+    "decommissioned": "decommissioned_at",
+}
+
+
+def touch_migration(
+    name: str,
+    step: str,
+    source_description: str | None = None,
+    notes: str | None = None,
+) -> None:
+    """Stamp one step of a migration (adopted/paralleled/cutover/decommissioned)
+    with the current time. Creates the row on first call. Never overwrites a
+    step that's already stamped — steps only move forward."""
+    column = _MIGRATION_STEP_COLUMNS[step]
+    ts = _now()
+    with connect() as conn:
+        exists = conn.execute("SELECT 1 FROM migrations WHERE project_name = ?", (name,)).fetchone()
+        if not exists:
+            conn.execute(
+                "INSERT INTO migrations (project_name, source_description) VALUES (?, ?)",
+                (name, source_description),
+            )
+        conn.execute(
+            f"UPDATE migrations SET {column} = COALESCE({column}, ?) WHERE project_name = ?",  # noqa: S608 — column comes from the fixed dict above, never from user input
+            (ts, name),
+        )
+        if source_description is not None:
+            conn.execute(
+                "UPDATE migrations SET source_description = ? WHERE project_name = ?",
+                (source_description, name),
+            )
+        if notes is not None:
+            conn.execute("UPDATE migrations SET notes = ? WHERE project_name = ?", (notes, name))
+
+
+def get_migration(name: str) -> dict[str, Any] | None:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM migrations WHERE project_name = ?", (name,)).fetchone()
+        return dict(row) if row else None
+
+
+def list_migrations() -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute("SELECT * FROM migrations ORDER BY project_name").fetchall()
+        return [dict(r) for r in rows]

@@ -2,10 +2,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from starlette.middleware.sessions import SessionMiddleware
 
-from . import config
+from . import config, dashboard
 from .db import init_db
-from .routers import health, projects
+from .routers import health, meta, projects
 
 
 def verify_token(authorization: str = Header(...)) -> None:
@@ -21,5 +22,14 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="devps agent", lifespan=lifespan)
+# The dashboard's login cookie is signed with the same DEVPS_TOKEN — one
+# credential for the whole system, not a second secret to generate/rotate.
+# https_only=False because the agent is only reachable today via an SSH
+# tunnel to 127.0.0.1 (plain HTTP) — flip to True once it's behind a real
+# HTTPS domain (see docs/ARCHITECTURE.md), or the cookie will never be set.
+app.add_middleware(SessionMiddleware, secret_key=config.BEARER_TOKEN, https_only=False)
+
 app.include_router(health.router)
 app.include_router(projects.router, dependencies=[Depends(verify_token)])
+app.include_router(meta.router, dependencies=[Depends(verify_token)])
+app.include_router(dashboard.router)

@@ -56,5 +56,7 @@ inherit` alcanza.
 3. `docker compose up -d --build`.
 4. Si mandaste `domain`, escribe el vhost de nginx y pide el certificado
    con certbot (la primera vez; los redeploys solo actualizan el vhost).
-5. Queda registrado — `hzploy list` lo muestra con su puerto, dominio y
-   estado.
+5. Queda registrado — `hzploy list`, o `/dashboard` (login con
+   `DEVPS_TOKEN`) lo muestra con su puerto, dominio, estado, y el historial
+   completo de eventos (incluidos los deploys que fallaron, no solo el
+   estado actual).

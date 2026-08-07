@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{% block title %}devps{% endblock %}</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #0f1115; color: #e6e8eb;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.75rem 1.5rem; background: #161923; border-bottom: 1px solid #262b3a;
+  }
+  header nav a {
+    color: #9aa4b2; text-decoration: none; margin-right: 1.25rem; font-size: 0.9rem;
+  }
+  header nav a:hover, header nav a.active { color: #e6e8eb; }
+  header .brand { font-weight: 600; color: #e6e8eb; margin-right: 2rem; }
+  main { padding: 1.5rem; max-width: 1100px; margin: 0 auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #1f2330; }
+  th { color: #9aa4b2; font-weight: 500; }
+  a { color: #6ea8fe; }
+  .badge {
+    display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px;
+    font-size: 0.75rem; font-weight: 600;
+  }
+  .badge-devps { background: #14361f; color: #6fd48a; }
+  .badge-adopted { background: #3a2f10; color: #e6c46b; }
+  .badge-ok { background: #14361f; color: #6fd48a; }
+  .badge-fail { background: #3a1414; color: #f28b8b; }
+  .badge-unknown { background: #262b3a; color: #9aa4b2; }
+  .muted { color: #6b7280; }
+  .card {
+    background: #161923; border: 1px solid #262b3a; border-radius: 8px;
+    padding: 1rem 1.25rem; margin-bottom: 1.25rem;
+  }
+  form.login { max-width: 320px; margin: 4rem auto; }
+  input[type=text], input[type=password] {
+    width: 100%; padding: 0.5rem; margin: 0.5rem 0 1rem;
+    background: #0f1115; border: 1px solid #262b3a; border-radius: 4px; color: inherit;
+  }
+  button {
+    background: #2f6fed; color: white; border: none; padding: 0.5rem 1rem;
+    border-radius: 4px; cursor: pointer; font-size: 0.9rem;
+  }
+  .error { color: #f28b8b; margin-bottom: 1rem; }
+  pre.logs {
+    background: #0a0b0e; padding: 1rem; border-radius: 6px; overflow-x: auto;
+    font-size: 0.8rem; max-height: 500px; overflow-y: auto;
+  }
+  .timeline { list-style: none; padding: 0; margin: 0; }
+  .timeline li { padding: 0.5rem 0; border-bottom: 1px solid #1f2330; font-size: 0.85rem; }
+  .timeline .ts { color: #6b7280; margin-right: 0.75rem; }
+</style>
+</head>
+<body>
+{% if session_authenticated %}
+<header>
+  <div style="display:flex;align-items:center;">
+    <span class="brand">devps</span>
+    <nav>
+      <a href="/dashboard">Projects</a>
+      <a href="/dashboard/migrations">Migrations</a>
+    </nav>
+  </div>
+  <a href="/dashboard/logout">Log out</a>
+</header>
+{% endif %}
+<main>
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>
