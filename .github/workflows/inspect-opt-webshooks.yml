@@ -1,0 +1,43 @@
+name: Inspect /opt/webshooks project (read-only)
+
+# One-off. Trying to figure out whether /opt/webshooks is the SaaS
+# platform behind zapateria/forrajeria/electronica/tienda.webshooks.com
+# (their Coolify app resources were deleted, but their data volumes —
+# webshooks_postgres_data etc. — still exist). This just cats the compose
+# file and skims the README/.env.example for domain/tenant hints. No
+# secrets printed (.env itself is skipped, only .env.example).
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    name: cat compose file + skim docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH inspect
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
+          script_stop: false
+          script: |
+            echo "===== docker-compose.prod.yml ====="
+            cat /opt/webshooks/docker-compose.prod.yml 2>/dev/null || echo "not found"
+
+            echo "===== README.md (first 100 lines) ====="
+            head -100 /opt/webshooks/README.md 2>/dev/null || echo "not found"
+
+            echo "===== .env.example (safe, no real secrets) ====="
+            cat /opt/webshooks/.env.example 2>/dev/null || echo "not found"
+
+            echo "===== ENVIRONMENTS.md (first 150 lines) ====="
+            head -150 /opt/webshooks/ENVIRONMENTS.md 2>/dev/null || echo "not found"
+
+            echo "===== git remote + last commits ====="
+            cd /opt/webshooks && git remote -v 2>&1 && git log --oneline -10 2>&1
