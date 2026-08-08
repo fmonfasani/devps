@@ -1,0 +1,19 @@
+name: Verify devps.webshooks.com (external check, no SSH)
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: curl from the internet
+        run: |
+          echo "===== /health (unauthenticated) ====="
+          curl -sv --max-time 10 "https://devps.webshooks.com/health" 2>&1 | tail -30
+          echo
+          echo "===== /dashboard/login ====="
+          curl -s -o /dev/null -w '%{http_code}\n' --max-time 10 "https://devps.webshooks.com/dashboard/login"

@@ -36,10 +36,10 @@ def compose_up(
 ) -> str:
     import os
 
-    cmd = ["docker", "compose", "-f", compose_file]
+    cmd = ["docker", "compose"]
     if env_file:
-        cmd.extend(["--env-file", env_file])
-    cmd.extend(["up", "-d", "--build"])
+        cmd += ["--env-file", env_file]
+    cmd += ["-f", compose_file, "up", "-d", "--build"]
 
     result = subprocess.run(
         cmd,

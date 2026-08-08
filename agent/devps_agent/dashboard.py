@@ -2,13 +2,14 @@
 against the same DEVPS_TOKEN. No separate build step, no separate service,
 no second credential to manage."""
 
+import secrets
 from pathlib import Path
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from . import config, docker_ops, registry, repo_analysis, secrets_store
+from . import config, docker_ops, login_throttle, registry, repo_analysis, secrets_store
 from .models import DeployRequest
 from .routers.projects import deploy as deploy_project
 
@@ -24,6 +25,15 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 # (include_in_schema=False).
 
 
+def _client_ip(request: Request) -> str:
+    # Set unconditionally by devps's own nginx vhost template
+    # (nginx.py's _VHOST_TEMPLATE) — falls back to the direct TCP peer for
+    # the SSH-tunnel-to-127.0.0.1 path, which doesn't go through nginx.
+    return request.headers.get("x-real-ip") or (
+        request.client.host if request.client else "unknown"
+    )
+
+
 def _authenticated(request: Request) -> bool:
     return bool(request.session.get("authenticated"))
 
@@ -37,13 +47,23 @@ def login_form(request: Request):
 
 @router.post("/dashboard/login")
 def login_submit(request: Request, token: str = Form(...)):
-    if token != config.BEARER_TOKEN:
+    ip = _client_ip(request)
+    if login_throttle.is_rate_limited(ip):
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {"session_authenticated": False, "error": "Too many attempts — try again later"},
+            status_code=429,
+        )
+    if not secrets.compare_digest(token, config.BEARER_TOKEN):
+        login_throttle.record_failure(ip)
         return templates.TemplateResponse(
             request,
             "login.html",
             {"session_authenticated": False, "error": "Invalid token"},
             status_code=401,
         )
+    login_throttle.record_success(ip)
     request.session["authenticated"] = True
     return RedirectResponse("/dashboard", status_code=303)
 

@@ -26,3 +26,10 @@ NGINX_SITES_AVAILABLE = Path(
 NGINX_SITES_ENABLED = Path(os.environ.get("DEVPS_NGINX_SITES_ENABLED", "/etc/nginx/sites-enabled"))
 CERTBOT_WEBROOT = os.environ.get("DEVPS_CERTBOT_WEBROOT", "/var/www/certbot")
 CERTBOT_EMAIL = os.environ.get("DEVPS_CERTBOT_EMAIL", "")
+
+# False while the dashboard is only reachable via an SSH tunnel to
+# 127.0.0.1 (plain HTTP) — the session cookie would never be set otherwise.
+# Flip to "true" in /opt/devps/agent.env once the dashboard sits behind a
+# real HTTPS domain (see docs/ARCHITECTURE.md), so the cookie can't leak
+# over a plain-HTTP request.
+SESSION_HTTPS_ONLY = os.environ.get("DEVPS_SESSION_HTTPS_ONLY", "false").lower() == "true"
