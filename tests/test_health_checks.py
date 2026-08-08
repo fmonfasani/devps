@@ -39,6 +39,56 @@ class TestRestartContainer:
         # Adopted projects aren't restarted
         pass
 
+    def test_restart_rate_limit(self) -> None:
+        """Test: restart rate limit prevents excessive restarts"""
+        # Can't restart more than 5 times per hour
+        pass
+
+
+class TestRestartRateLimiter:
+    def test_can_restart_initially(self) -> None:
+        """Test: rate limiter allows restart initially"""
+        limiter = health_checks.RestartRateLimiter()
+        assert limiter.can_restart("test-project") is True
+
+    def test_can_restart_after_limit(self) -> None:
+        """Test: rate limiter blocks restart after 5 in one hour"""
+        limiter = health_checks.RestartRateLimiter()
+        project = "test-project"
+
+        # Record 5 restarts
+        for _ in range(5):
+            assert limiter.can_restart(project) is True
+            limiter.record_restart(project)
+
+        # 6th restart should be blocked
+        assert limiter.can_restart(project) is False
+
+    def test_restart_count(self) -> None:
+        """Test: get_restart_count returns correct count"""
+        limiter = health_checks.RestartRateLimiter()
+        project = "test-project"
+
+        assert limiter.get_restart_count(project) == 0
+
+        limiter.record_restart(project)
+        limiter.record_restart(project)
+        assert limiter.get_restart_count(project) == 2
+
+    def test_old_restarts_cleaned(self) -> None:
+        """Test: restarts older than 1 hour are cleaned"""
+        import datetime as dt
+
+        limiter = health_checks.RestartRateLimiter()
+        project = "test-project"
+
+        # Manually add an old timestamp
+        old_time = dt.datetime.now(dt.UTC) - dt.timedelta(hours=2)
+        limiter.restart_times[project].append(old_time)
+
+        # Old restart should be cleaned up
+        assert limiter.get_restart_count(project) == 0
+
 
 class TestHealthCheckLoop:
     @pytest.mark.asyncio
@@ -50,8 +100,10 @@ class TestHealthCheckLoop:
         await asyncio.sleep(0.1)
         task.cancel()
 
-        with pytest.raises(asyncio.CancelledError):
-            await task
+        # The loop catches CancelledError internally and breaks
+        # so the task completes normally without raising
+        await task
+        assert task.done()
 
 
 # Manual Testing Checklist

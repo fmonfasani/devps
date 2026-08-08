@@ -21,6 +21,25 @@
   </table>
 </div>
 
+{% if project.managed_by == "devps" %}
+<div class="card">
+  <h3>Health Status</h3>
+  <table>
+    <tr><th>Status</th><td>
+      <span class="badge badge-{{ 'ok' if project.health_status == 'running' else 'fail' }}">{{ project.health_status or "unknown" }}</span>
+    </td></tr>
+    <tr><th>Restarts (1h)</th><td>{{ project.restart_count or 0 }}</td></tr>
+    <tr><th>Last Restart</th><td>{{ project.last_restart_at or "—" }}</td></tr>
+    <tr><th>Last Check</th><td>{{ project.last_health_check_at or "—" }}</td></tr>
+  </table>
+  {% if health_events %}
+  <p style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
+    Recent auto-restart events: {{ health_events|length }}
+  </p>
+  {% endif %}
+</div>
+{% endif %}
+
 {% if migration %}
 <div class="card">
   <h3>Migration</h3>

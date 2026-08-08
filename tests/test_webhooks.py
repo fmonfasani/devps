@@ -22,16 +22,17 @@ class TestGitHubSignatureValidation:
         assert header.startswith("sha256=")
 
     def test_invalid_signature_format(self) -> None:
-        with pytest.raises(webhooks.WebhookError, match="not configured"):
-            webhooks.validate_github_signature(b"data", "invalid-format")
+        # Signature without sha256= prefix returns False (invalid)
+        result = webhooks.validate_github_signature(b"data", "invalid-format")
+        assert result is False
 
     def test_signature_without_sha256_prefix(self) -> None:
         payload = b"data"
         signature = "abc123"
 
-        # Should return False, but raises because no secret configured
-        with pytest.raises(webhooks.WebhookError):
-            webhooks.validate_github_signature(payload, signature)
+        # Should return False (signature doesn't start with sha256=)
+        result = webhooks.validate_github_signature(payload, signature)
+        assert result is False
 
 
 class TestParseGitHubPayload:
@@ -131,12 +132,13 @@ class TestHandleWebhook:
             "commits": [{"id": "abc123"}],
         }
 
-        with pytest.raises(webhooks.WebhookError, match="not configured"):
+        # Invalid signature raises "Invalid webhook signature"
+        with pytest.raises(webhooks.WebhookError, match="Invalid webhook signature"):
             webhooks.handle_webhook("myapp", payload, "sha256=invalid")
 
     def test_webhook_invalid_payload(self) -> None:
         payload = {"ref": "refs/heads/main"}  # Missing required fields
 
-        # Signature validation happens first, so this will fail on that
-        with pytest.raises(webhooks.WebhookError, match="not configured"):
+        # Signature validation happens first and fails, so this will fail on that
+        with pytest.raises(webhooks.WebhookError, match="Invalid webhook signature"):
             webhooks.handle_webhook("myapp", payload, "sha256=abc123")

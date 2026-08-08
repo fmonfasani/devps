@@ -1,7 +1,8 @@
 """Health monitoring and auto-recovery for deployed projects."""
 
 import asyncio
-from datetime import UTC, datetime
+from collections import defaultdict
+from datetime import UTC, datetime, timedelta
 
 from . import config, docker_ops, registry
 
@@ -10,6 +11,47 @@ class HealthCheckError(Exception):
     """Health check operation failed."""
 
     pass
+
+
+class RestartRateLimiter:
+    """Simple in-memory rate limiter for auto-restarts.
+
+    Limits restarts to MAX_RESTARTS_PER_HOUR per project to prevent
+    restart loops (e.g., if the container immediately crashes).
+    """
+
+    MAX_RESTARTS_PER_HOUR = 5
+
+    def __init__(self) -> None:
+        self.restart_times: dict[str, list[datetime]] = defaultdict(list)
+
+    def can_restart(self, project_name: str) -> bool:
+        """Check if project can be restarted (rate limit not exceeded)."""
+        now = datetime.now(UTC)
+        one_hour_ago = now - timedelta(hours=1)
+
+        # Clean old timestamps
+        self.restart_times[project_name] = [
+            ts for ts in self.restart_times[project_name] if ts > one_hour_ago
+        ]
+
+        return len(self.restart_times[project_name]) < self.MAX_RESTARTS_PER_HOUR
+
+    def record_restart(self, project_name: str) -> None:
+        """Record a restart attempt."""
+        self.restart_times[project_name].append(datetime.now(UTC))
+
+    def get_restart_count(self, project_name: str) -> int:
+        """Get number of restarts in the last hour."""
+        now = datetime.now(UTC)
+        one_hour_ago = now - timedelta(hours=1)
+        self.restart_times[project_name] = [
+            ts for ts in self.restart_times[project_name] if ts > one_hour_ago
+        ]
+        return len(self.restart_times[project_name])
+
+
+_restart_limiter = RestartRateLimiter()
 
 
 def check_container_health(project_name: str) -> str:
@@ -62,6 +104,8 @@ def update_health_status(project_name: str, status: str) -> None:
 def restart_container(project_name: str) -> bool:
     """Attempt to restart a project's container.
 
+    Rate-limited to 5 restarts per hour to prevent restart loops.
+
     Returns:
         True if restart succeeded, False otherwise
     """
@@ -72,10 +116,22 @@ def restart_container(project_name: str) -> bool:
     if project["managed_by"] != "devps":
         return False
 
+    # Check rate limit
+    if not _restart_limiter.can_restart(project_name):
+        count = _restart_limiter.get_restart_count(project_name)
+        registry.log_event(
+            project_name,
+            "auto_restart",
+            f"rate limit exceeded ({count}/hour), skipping restart",
+            success=False,
+        )
+        return False
+
     try:
         docker_ops.compose_restart(
             config.PROJECTS_DIR / project_name, project.get("compose_file", "docker-compose.yml")
         )
+        _restart_limiter.record_restart(project_name)
         _increment_restart_count(project_name)
         registry.log_event(
             project_name,

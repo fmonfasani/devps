@@ -8,7 +8,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from . import config, dashboard, health_checks
 from .db import init_db
-from .routers import health, meta, projects, webhooks
+from .routers import health, health_status, meta, projects, webhooks
 
 
 def verify_token(authorization: str = Header(...)) -> None:
@@ -40,6 +40,7 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(projects.router, dependencies=[Depends(verify_token)])
+app.include_router(health_status.router, dependencies=[Depends(verify_token)])
 app.include_router(meta.router, dependencies=[Depends(verify_token)])
 app.include_router(webhooks.router)
 app.include_router(dashboard.router)

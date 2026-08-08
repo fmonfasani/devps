@@ -126,6 +126,10 @@ def project_detail_page(request: Request, name: str):
             status_code=404,
         )
     logs = docker_ops.container_logs(name, 200) if project["managed_by"] == "devps" else None
+
+    # Get health history (auto-restart events)
+    health_events = [e for e in registry.get_events(name, 100) if e["kind"] == "auto_restart"]
+
     return templates.TemplateResponse(
         request,
         "project_detail.html",
@@ -134,6 +138,7 @@ def project_detail_page(request: Request, name: str):
             "project": project,
             "migration": registry.get_migration(name),
             "events": registry.get_events(name, 100),
+            "health_events": health_events,
             "logs": logs,
         },
     )
