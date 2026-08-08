@@ -47,10 +47,10 @@ jobs:
             ls -la .
 
             echo "===== docker compose config check (dry, no changes) ====="
-            docker compose config --services 2>&1 || echo "compose config check failed — will still try up"
+            docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml config --services 2>&1 || echo "compose config check failed — will still try up"
 
-            echo "===== docker compose up -d (no pull, no orphan removal) ====="
-            docker compose up -d
+            echo "===== docker compose up -d (both compose files, no pull, no orphan removal) ====="
+            docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml up -d
 
             echo "===== waiting 10s for containers to settle ====="
             sleep 10
