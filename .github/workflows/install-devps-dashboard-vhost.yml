@@ -5,6 +5,14 @@ name: Install devps.webshooks.com vhost + certificate
 # does for any other devps-managed project — bootstrap HTTP vhost for the
 # ACME challenge, mint the cert, then the full HTTPS vhost proxying to the
 # agent's own port (127.0.0.1:9400). Safe to re-run — idempotent.
+#
+# Vhost content is base64-encoded and written with a single `echo | base64
+# -d > file` line rather than a `cat <<EOF` heredoc — a heredoc here
+# previously got corrupted by appleboy/ssh-action's drone-ssh backend,
+# which injects an exit-code tracking line (DRONE_SSH_PREV_COMMAND_EXIT_CODE=0)
+# between script lines; that line landed inside the heredoc's stdin and
+# broke the resulting nginx config. A single-line write has no multi-line
+# boundary for that injection to land inside.
 
 on:
   workflow_dispatch: {}
@@ -39,16 +47,19 @@ jobs:
     steps:
       - name: SSH install
         uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        env:
+          BOOTSTRAP_B64: c2VydmVyIHsKICAgIGxpc3RlbiA4MDsKICAgIGxpc3RlbiBbOjpdOjgwOwogICAgc2VydmVyX25hbWUgZGV2cHMud2Vic2hvb2tzLmNvbTsKICAgIGxvY2F0aW9uIC8ud2VsbC1rbm93bi9hY21lLWNoYWxsZW5nZS8gewogICAgICAgIHJvb3QgL3Zhci93d3cvY2VydGJvdDsKICAgIH0KICAgIGxvY2F0aW9uIC8gewogICAgICAgIHJldHVybiA0MDQ7CiAgICB9Cn0K
+          FULL_B64: c2VydmVyIHsKICAgIGxpc3RlbiA4MDsKICAgIGxpc3RlbiBbOjpdOjgwOwogICAgc2VydmVyX25hbWUgZGV2cHMud2Vic2hvb2tzLmNvbTsKICAgIGxvY2F0aW9uIC8ud2VsbC1rbm93bi9hY21lLWNoYWxsZW5nZS8gewogICAgICAgIHJvb3QgL3Zhci93d3cvY2VydGJvdDsKICAgIH0KICAgIGxvY2F0aW9uIC8gewogICAgICAgIHJldHVybiAzMDEgaHR0cHM6Ly8kaG9zdCRyZXF1ZXN0X3VyaTsKICAgIH0KfQpzZXJ2ZXIgewogICAgbGlzdGVuIDQ0MyBzc2wgaHR0cDI7CiAgICBsaXN0ZW4gWzo6XTo0NDMgc3NsIGh0dHAyOwogICAgc2VydmVyX25hbWUgZGV2cHMud2Vic2hvb2tzLmNvbTsKICAgIHNzbF9jZXJ0aWZpY2F0ZSAvZXRjL2xldHNlbmNyeXB0L2xpdmUvZGV2cHMud2Vic2hvb2tzLmNvbS9mdWxsY2hhaW4ucGVtOwogICAgc3NsX2NlcnRpZmljYXRlX2tleSAvZXRjL2xldHNlbmNyeXB0L2xpdmUvZGV2cHMud2Vic2hvb2tzLmNvbS9wcml2a2V5LnBlbTsKICAgIGFkZF9oZWFkZXIgU3RyaWN0LVRyYW5zcG9ydC1TZWN1cml0eSAibWF4LWFnZT0xNTc2ODAwMCIgYWx3YXlzOwogICAgYWRkX2hlYWRlciBYLUNvbnRlbnQtVHlwZS1PcHRpb25zICJub3NuaWZmIiBhbHdheXM7CiAgICBhZGRfaGVhZGVyIFJlZmVycmVyLVBvbGljeSAic3RyaWN0LW9yaWdpbi13aGVuLWNyb3NzLW9yaWdpbiIgYWx3YXlzOwogICAgbG9jYXRpb24gLyB7CiAgICAgICAgcHJveHlfcGFzcyBodHRwOi8vMTI3LjAuMC4xOjk0MDA7CiAgICAgICAgcHJveHlfaHR0cF92ZXJzaW9uIDEuMTsKICAgICAgICBwcm94eV9zZXRfaGVhZGVyIFVwZ3JhZGUgJGh0dHBfdXBncmFkZTsKICAgICAgICBwcm94eV9zZXRfaGVhZGVyIENvbm5lY3Rpb24gInVwZ3JhZGUiOwogICAgICAgIHByb3h5X3NldF9oZWFkZXIgSG9zdCAkaG9zdDsKICAgICAgICBwcm94eV9zZXRfaGVhZGVyIFgtUmVhbC1JUCAkcmVtb3RlX2FkZHI7CiAgICAgICAgcHJveHlfc2V0X2hlYWRlciBYLUZvcndhcmRlZC1Gb3IgJHByb3h5X2FkZF94X2ZvcndhcmRlZF9mb3I7CiAgICAgICAgcHJveHlfc2V0X2hlYWRlciBYLUZvcndhcmRlZC1Qcm90byAkc2NoZW1lOwogICAgICAgIHByb3h5X3JlYWRfdGltZW91dCA2MHM7CiAgICB9Cn0K
         with:
           host: ${{ secrets.HETZNER_HOST }}
           username: ${{ secrets.HETZNER_USER }}
           key: ${{ secrets.HETZNER_SSH_KEY }}
           port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
           script_stop: true
+          envs: BOOTSTRAP_B64,FULL_B64
           script: |
             set -euo pipefail
             DOMAIN=devps.webshooks.com
-            PORT=9400
             WEBROOT=/var/www/certbot
             AVAILABLE=/etc/nginx/sites-available/$DOMAIN
             ENABLED=/etc/nginx/sites-enabled/$DOMAIN
@@ -57,65 +68,19 @@ jobs:
 
             if [ ! -d "/etc/letsencrypt/live/$DOMAIN" ]; then
               echo "===== writing bootstrap (ACME-only) vhost ====="
-              cat > "$AVAILABLE" <<EOF
-            server {
-                listen 80;
-                listen [::]:80;
-                server_name $DOMAIN;
-                location /.well-known/acme-challenge/ {
-                    root $WEBROOT;
-                }
-                location / {
-                    return 404;
-                }
-            }
-            EOF
+              echo "$BOOTSTRAP_B64" | base64 -d > "$AVAILABLE"
               ln -sf "$AVAILABLE" "$ENABLED"
               nginx -t
               systemctl reload nginx
 
               echo "===== requesting certificate ====="
-              certbot certonly --webroot -w "$WEBROOT" -d "$DOMAIN" \
-                --non-interactive --agree-tos --email "${{ secrets.CERTBOT_EMAIL || 'admin@webshooks.com' }}"
+              certbot certonly --webroot -w "$WEBROOT" -d "$DOMAIN" --non-interactive --agree-tos --email admin@webshooks.com
             else
               echo "certificate already exists for $DOMAIN, skipping certbot"
             fi
 
             echo "===== writing full HTTPS vhost ====="
-            cat > "$AVAILABLE" <<EOF
-            server {
-                listen 80;
-                listen [::]:80;
-                server_name $DOMAIN;
-                location /.well-known/acme-challenge/ {
-                    root $WEBROOT;
-                }
-                location / {
-                    return 301 https://\$host\$request_uri;
-                }
-            }
-            server {
-                listen 443 ssl http2;
-                listen [::]:443 ssl http2;
-                server_name $DOMAIN;
-                ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
-                ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
-                add_header Strict-Transport-Security "max-age=15768000" always;
-                add_header X-Content-Type-Options "nosniff" always;
-                add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-                location / {
-                    proxy_pass http://127.0.0.1:$PORT;
-                    proxy_http_version 1.1;
-                    proxy_set_header Upgrade \$http_upgrade;
-                    proxy_set_header Connection "upgrade";
-                    proxy_set_header Host \$host;
-                    proxy_set_header X-Real-IP \$remote_addr;
-                    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                    proxy_set_header X-Forwarded-Proto \$scheme;
-                    proxy_read_timeout 60s;
-                }
-            }
-            EOF
+            echo "$FULL_B64" | base64 -d > "$AVAILABLE"
             ln -sf "$AVAILABLE" "$ENABLED"
             nginx -t
             systemctl reload nginx
