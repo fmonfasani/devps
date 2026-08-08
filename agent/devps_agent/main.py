@@ -1,3 +1,4 @@
+import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -11,7 +12,7 @@ from .routers import health, meta, projects
 
 def verify_token(authorization: str = Header(...)) -> None:
     scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or token != config.BEARER_TOKEN:
+    if scheme.lower() != "bearer" or not secrets.compare_digest(token, config.BEARER_TOKEN):
         raise HTTPException(status_code=401, detail="invalid or missing bearer token")
 
 
@@ -24,10 +25,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="devps agent", lifespan=lifespan)
 # The dashboard's login cookie is signed with the same DEVPS_TOKEN — one
 # credential for the whole system, not a second secret to generate/rotate.
-# https_only=False because the agent is only reachable today via an SSH
-# tunnel to 127.0.0.1 (plain HTTP) — flip to True once it's behind a real
-# HTTPS domain (see docs/ARCHITECTURE.md), or the cookie will never be set.
-app.add_middleware(SessionMiddleware, secret_key=config.BEARER_TOKEN, https_only=False)
+# See config.SESSION_HTTPS_ONLY for why this isn't hardcoded True.
+app.add_middleware(
+    SessionMiddleware, secret_key=config.BEARER_TOKEN, https_only=config.SESSION_HTTPS_ONLY
+)
 
 app.include_router(health.router)
 app.include_router(projects.router, dependencies=[Depends(verify_token)])
