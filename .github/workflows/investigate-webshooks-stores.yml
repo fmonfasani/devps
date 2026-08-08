@@ -1,0 +1,53 @@
+name: Investigate down webshooks.com stores (read-only)
+
+# One-off. zapateria/forrajeria/electronica/tienda.webshooks.com are all
+# returning 502 (confirmed in a prior run) with no matching container or
+# compose project anywhere on the host. This digs into Coolify's own state
+# (its data dir, its Postgres app records, docker images/logs that might
+# still exist even though the containers don't) to figure out whether
+# Coolify still thinks these are its apps, and whether there's anything
+# to restart vs. something that needs to be rebuilt from scratch.
+# Read-only: no docker run/start/restart, no writes.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  investigate:
+    name: Look at Coolify state + leftover images/logs
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH investigate
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
+          script_stop: false
+          script: |
+            echo "===== coolify-db: applications matching these domains ====="
+            docker exec coolify-db psql -U coolify -d coolify -t -c \
+              "select id, name, fqdn, status from applications where fqdn ilike '%zapateria%' or fqdn ilike '%forrajeria%' or fqdn ilike '%electronica%' or fqdn ilike '%tienda%';" \
+              2>&1 || echo "query failed (wrong db name/user, or psql not available in that image)"
+
+            echo "===== /data/coolify directory structure (depth 3) ====="
+            find /data/coolify -maxdepth 3 -iname '*zapateria*' -o -maxdepth 3 -iname '*forrajeria*' -o -maxdepth 3 -iname '*electronica*' -o -maxdepth 3 -iname '*tienda*' 2>/dev/null || echo "nothing found by name"
+
+            echo "===== docker images that might belong to these stores ====="
+            docker images --format 'table {{.Repository}}\t{{.Tag}}\t{{.CreatedAt}}\t{{.Size}}' | grep -iE 'zapateria|forrajeria|electronica|tienda|webshooks' || echo "no matching images"
+
+            echo "===== docker ps -a, unfiltered, full list (sanity check) ====="
+            docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
+
+            echo "===== nginx error log: recent entries for these domains ====="
+            grep -iE 'zapateria|forrajeria|electronica|tienda' /var/log/nginx/error.log 2>/dev/null | tail -20 || echo "no matching nginx error log entries (or log rotated out)"
+
+            echo "===== when did nginx last successfully proxy to 31002-31005? (access log) ====="
+            for p in 31002 31003 31004 31005; do
+              echo "-- upstream :$p --"
+              grep -h "127.0.0.1:$p" /var/log/nginx/access.log 2>/dev/null | tail -3 || echo "no access log hits for :$p"
+            done
