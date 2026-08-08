@@ -384,6 +384,74 @@ async def update_settings_endpoint(request: Request, project_name: str):
         return JSONResponse({"success": False, "error": str(e)})
 
 
+@router.post("/dashboard/api/mute-alerts/{project_name}")
+async def mute_alerts_endpoint(request: Request, project_name: str):
+    if not _authenticated(request):
+        return JSONResponse({"success": False, "error": "Not authenticated"}, status_code=401)
+
+    user = _get_user(request)
+    if not user:
+        return JSONResponse({"success": False, "error": "Not authenticated"}, status_code=401)
+
+    project = registry.get_project(project_name)
+    if not project:
+        return JSONResponse({"success": False, "error": "Project not found"}, status_code=404)
+
+    try:
+        rbac.require_permission(user["username"], "manage_project", project_name)
+    except rbac.RBACError:
+        return JSONResponse({"success": False, "error": "Access denied"}, status_code=403)
+
+    try:
+        from datetime import datetime, timedelta
+        data = await request.json()
+        hours = int(data.get("hours", 1))
+        hours = max(1, min(hours, 24))
+
+        mute_until = datetime.utcnow() + timedelta(hours=hours)
+        mute_until_str = mute_until.isoformat() + "Z"
+
+        with connect() as conn:
+            conn.execute(
+                "UPDATE projects SET alert_muted_until = ? WHERE name = ?",
+                (mute_until_str, project_name),
+            )
+
+        return JSONResponse({"success": True, "muted_until": mute_until_str})
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@router.post("/dashboard/api/unmute-alerts/{project_name}")
+async def unmute_alerts_endpoint(request: Request, project_name: str):
+    if not _authenticated(request):
+        return JSONResponse({"success": False, "error": "Not authenticated"}, status_code=401)
+
+    user = _get_user(request)
+    if not user:
+        return JSONResponse({"success": False, "error": "Not authenticated"}, status_code=401)
+
+    project = registry.get_project(project_name)
+    if not project:
+        return JSONResponse({"success": False, "error": "Project not found"}, status_code=404)
+
+    try:
+        rbac.require_permission(user["username"], "manage_project", project_name)
+    except rbac.RBACError:
+        return JSONResponse({"success": False, "error": "Access denied"}, status_code=403)
+
+    try:
+        with connect() as conn:
+            conn.execute(
+                "UPDATE projects SET alert_muted_until = NULL WHERE name = ?",
+                (project_name,),
+            )
+
+        return JSONResponse({"success": True})
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+
 @router.get("/dashboard/projects/{name}")
 def project_detail_page(request: Request, name: str):
     if not _authenticated(request):

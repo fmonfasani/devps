@@ -81,6 +81,7 @@ def _migrate_alert_columns() -> None:
             ("alert_email", "TEXT", "NULL"),
             ("alert_slack", "TEXT", "NULL"),
             ("alert_enabled", "INTEGER", "1"),
+            ("alert_muted_until", "TEXT", "NULL"),
         ]:
             try:
                 conn.execute(f"ALTER TABLE projects ADD COLUMN {col} {col_type} DEFAULT {default}")

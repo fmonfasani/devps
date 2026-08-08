@@ -25,12 +25,18 @@
 <div class="card">
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
     <h3 style="margin: 0;">Health Status</h3>
-    <div style="display: flex; gap: 0.5rem;">
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
       <button onclick="openLogsModal()" style="background: #2f6fed; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">
         📋 View Logs
       </button>
+      <button onclick="openErrorsModal()" style="background: #ef4444; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">
+        🔴 Error Trace
+      </button>
       <button onclick="openRestartModal()" style="background: #f59e0b; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">
         🔄 Restart
+      </button>
+      <button onclick="openMuteModal()" style="background: #8b5cf6; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">
+        🔕 Mute Alerts
       </button>
       <button onclick="openSettingsModal()" style="background: #6366f1; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">
         ⚙️ Settings
@@ -59,6 +65,12 @@
       <h2 style="margin: 0;">Container Logs</h2>
       <button onclick="closeLogsModal()" style="background: none; border: none; color: #9aa4b2; font-size: 1.5rem; cursor: pointer;">×</button>
     </div>
+    <div style="padding: 1rem 1.5rem; border-bottom: 1px solid #262b3a; display: flex; gap: 0.5rem; align-items: center;">
+      <label style="color: #9aa4b2; font-size: 0.9rem;">Filter:</label>
+      <button onclick="filterLogs('all')" id="filterAll" class="log-filter-btn active" style="background: #2f6fed; color: white; border: none; padding: 0.3rem 0.6rem; border-radius: 3px; cursor: pointer; font-size: 0.85rem;">All</button>
+      <button onclick="filterLogs('error')" id="filterError" class="log-filter-btn" style="background: #ef4444; color: white; border: none; padding: 0.3rem 0.6rem; border-radius: 3px; cursor: pointer; font-size: 0.85rem;">Errors</button>
+      <button onclick="filterLogs('warn')" id="filterWarn" class="log-filter-btn" style="background: #f59e0b; color: white; border: none; padding: 0.3rem 0.6rem; border-radius: 3px; cursor: pointer; font-size: 0.85rem;">Warnings</button>
+    </div>
     <div style="flex: 1; padding: 1rem 1.5rem; overflow-y: auto;">
       <pre id="logsContent" class="logs" style="margin: 0;">Loading...</pre>
     </div>
@@ -83,6 +95,27 @@
         Restart Now
       </button>
       <button onclick="closeRestartModal()" style="flex: 1; background: #3a3f4a; color: white; border: none; padding: 0.75rem; border-radius: 4px; cursor: pointer;">
+        Cancel
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Mute Alerts Modal -->
+<div id="muteModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center;">
+  <div style="background: #161923; border: 1px solid #262b3a; border-radius: 8px; padding: 2rem; max-width: 400px; width: 90%;">
+    <h2 style="margin-top: 0;">Mute Alerts</h2>
+    <p style="color: #9aa4b2;">Silence notifications for this project during maintenance:</p>
+    <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+      <button onclick="muteAlertsFor(1)" style="background: #8b5cf6; color: white; border: none; padding: 0.6rem 1rem; border-radius: 4px; cursor: pointer;">1 hour</button>
+      <button onclick="muteAlertsFor(4)" style="background: #8b5cf6; color: white; border: none; padding: 0.6rem 1rem; border-radius: 4px; cursor: pointer;">4 hours</button>
+      <button onclick="muteAlertsFor(24)" style="background: #8b5cf6; color: white; border: none; padding: 0.6rem 1rem; border-radius: 4px; cursor: pointer;">24 hours</button>
+    </div>
+    <div style="display: flex; gap: 1rem;">
+      <button onclick="unmuteAlerts()" style="flex: 1; background: #10b981; color: white; border: none; padding: 0.75rem; border-radius: 4px; cursor: pointer; font-weight: 600;">
+        Unmute Now
+      </button>
+      <button onclick="closeMuteModal()" style="flex: 1; background: #3a3f4a; color: white; border: none; padding: 0.75rem; border-radius: 4px; cursor: pointer;">
         Cancel
       </button>
     </div>
@@ -120,6 +153,7 @@
 
 <script>
 const projectName = "{{ project.name }}";
+let allLogs = '';
 
 function openLogsModal() {
   document.getElementById('logsModal').style.display = 'flex';
@@ -128,7 +162,11 @@ function openLogsModal() {
     .then(r => r.json())
     .then(data => {
       if (data.success) {
+        allLogs = data.logs;
         document.getElementById('logsContent').textContent = data.logs;
+        document.getElementById('filterAll').classList.add('active');
+        document.getElementById('filterError').classList.remove('active');
+        document.getElementById('filterWarn').classList.remove('active');
       } else {
         document.getElementById('logsContent').textContent = 'Error: ' + data.error;
       }
@@ -140,6 +178,52 @@ function openLogsModal() {
 
 function closeLogsModal() {
   document.getElementById('logsModal').style.display = 'none';
+}
+
+function filterLogs(level) {
+  const buttons = document.querySelectorAll('.log-filter-btn');
+  buttons.forEach(b => b.classList.remove('active'));
+
+  if (level === 'all') {
+    document.getElementById('filterAll').classList.add('active');
+    document.getElementById('logsContent').textContent = allLogs;
+  } else if (level === 'error') {
+    document.getElementById('filterError').classList.add('active');
+    const filtered = allLogs.split('\n').filter(line =>
+      line.toUpperCase().includes('ERROR') || line.toUpperCase().includes('EXCEPTION')
+    ).join('\n');
+    document.getElementById('logsContent').textContent = filtered || '(No errors found)';
+  } else if (level === 'warn') {
+    document.getElementById('filterWarn').classList.add('active');
+    const filtered = allLogs.split('\n').filter(line =>
+      line.toUpperCase().includes('WARN') || line.toUpperCase().includes('WARNING')
+    ).join('\n');
+    document.getElementById('logsContent').textContent = filtered || '(No warnings found)';
+  }
+}
+
+function openErrorsModal() {
+  document.getElementById('logsModal').style.display = 'flex';
+  document.getElementById('logsContent').textContent = 'Loading...';
+  fetch(`/dashboard/api/logs/${projectName}?tail=1000`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        allLogs = data.logs;
+        const filtered = data.logs.split('\n').filter(line =>
+          line.toUpperCase().includes('ERROR') || line.toUpperCase().includes('EXCEPTION')
+        ).join('\n');
+        document.getElementById('logsContent').textContent = filtered || '(No errors found)';
+        document.getElementById('filterError').classList.add('active');
+        document.getElementById('filterAll').classList.remove('active');
+        document.getElementById('filterWarn').classList.remove('active');
+      } else {
+        document.getElementById('logsContent').textContent = 'Error: ' + data.error;
+      }
+    })
+    .catch(e => {
+      document.getElementById('logsContent').textContent = 'Error: ' + e.message;
+    });
 }
 
 function downloadLogs() {
@@ -232,6 +316,46 @@ function saveSettings(e) {
   .catch(e => alert('Error: ' + e.message));
 }
 
+function openMuteModal() {
+  document.getElementById('muteModal').style.display = 'flex';
+}
+
+function closeMuteModal() {
+  document.getElementById('muteModal').style.display = 'none';
+}
+
+function muteAlertsFor(hours) {
+  fetch(`/dashboard/api/mute-alerts/${projectName}`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({hours})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      alert(`Alerts muted for ${hours} hour(s)`);
+      closeMuteModal();
+    } else {
+      alert('Error: ' + data.error);
+    }
+  })
+  .catch(e => alert('Error: ' + e.message));
+}
+
+function unmuteAlerts() {
+  fetch(`/dashboard/api/unmute-alerts/${projectName}`, {method: 'POST'})
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      alert('Alerts unmuted');
+      closeMuteModal();
+    } else {
+      alert('Error: ' + data.error);
+    }
+  })
+  .catch(e => alert('Error: ' + e.message));
+}
+
 // Close modals when clicking outside
 document.getElementById('logsModal')?.addEventListener('click', (e) => {
   if (e.target.id === 'logsModal') closeLogsModal();
@@ -239,6 +363,10 @@ document.getElementById('logsModal')?.addEventListener('click', (e) => {
 
 document.getElementById('restartModal')?.addEventListener('click', (e) => {
   if (e.target.id === 'restartModal') closeRestartModal();
+});
+
+document.getElementById('muteModal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'muteModal') closeMuteModal();
 });
 
 document.getElementById('settingsModal')?.addEventListener('click', (e) => {
