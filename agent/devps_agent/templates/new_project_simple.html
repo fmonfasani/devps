@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}devps — New Project{% endblock %}
+
+{% block content %}
+<p><a href="/dashboard">&larr; Projects</a></p>
+<h1>Create New Project</h1>
+
+<div class="card" style="max-width: 500px;">
+  <p style="color: #9aa4b2; margin-bottom: 1.5rem;">
+    Create a new project in one click. We'll generate a GitHub repository and deploy it automatically.
+  </p>
+
+  <form onsubmit="createProjectAuto(event)">
+    <label style="display: block; margin-bottom: 1.5rem;">
+      <span style="display: block; margin-bottom: 0.5rem; color: #9aa4b2; font-weight: 500;">Project Name</span>
+      <input type="text" id="projectName" placeholder="my-awesome-app"
+             pattern="[a-zA-Z0-9_-]+" required
+             style="width: 100%; padding: 0.75rem; background: #0f1115; border: 1px solid #262b3a; border-radius: 4px; color: inherit; box-sizing: border-box; font-size: 1rem;">
+      <span style="display: block; margin-top: 0.5rem; color: #6b7280; font-size: 0.85rem;">
+        Letters, numbers, hyphens, underscores only
+      </span>
+    </label>
+
+    <div style="display: flex; gap: 1rem;">
+      <button type="submit" id="createBtn" style="flex: 1; background: #2f6fed; color: white; border: none; padding: 0.75rem; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 1rem;">
+        ✨ Create & Deploy
+      </button>
+      <a href="/dashboard" style="flex: 1; background: #3a3f4a; color: white; border: none; padding: 0.75rem; border-radius: 4px; cursor: pointer; font-weight: 600; text-decoration: none; text-align: center; display: flex; align-items: center; justify-content: center;">
+        Cancel
+      </a>
+    </div>
+  </form>
+
+  <div id="result" style="margin-top: 2rem; display: none;">
+    <div id="resultContent" style="padding: 1rem; background: #14361f; border: 1px solid #10b981; border-radius: 4px; color: #6fd48a;"></div>
+  </div>
+</div>
+
+<script>
+async function createProjectAuto(e) {
+  e.preventDefault();
+
+  const projectName = document.getElementById('projectName').value.trim();
+  const btn = document.getElementById('createBtn');
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Creating...';
+
+  try {
+    const response = await fetch('/dashboard/api/create-project-auto', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({project_name: projectName})
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      const resultDiv = document.getElementById('result');
+      const contentDiv = document.getElementById('resultContent');
+
+      contentDiv.innerHTML = `
+        <p style="margin: 0; font-weight: 600;">✅ ${data.message}</p>
+        <p style="margin: 0.5rem 0 0; font-size: 0.9rem;">
+          <a href="/dashboard/projects/${data.project_name}" style="color: #6fd48a;">View project →</a>
+        </p>
+      `;
+      resultDiv.style.display = 'block';
+
+      setTimeout(() => {
+        window.location.href = `/dashboard/projects/${data.project_name}`;
+      }, 2000);
+    } else {
+      alert('Error: ' + data.error);
+      btn.disabled = false;
+      btn.textContent = '✨ Create & Deploy';
+    }
+  } catch (err) {
+    alert('Error: ' + err.message);
+    btn.disabled = false;
+    btn.textContent = '✨ Create & Deploy';
+  }
+}
+</script>
+{% endblock %}

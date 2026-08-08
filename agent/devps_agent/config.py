@@ -44,3 +44,7 @@ DASHBOARD_PASSWORD_SALT = os.environ.get("DEVPS_DASHBOARD_PASSWORD_SALT")
 # Generate: python3 -c "import secrets; print(secrets.token_hex(32))"
 # Set as GitHub webhook secret in repo settings.
 WEBHOOK_SECRET = os.environ.get("DEVPS_WEBHOOK_SECRET")
+
+# GitHub Personal Access Token for auto-creating repositories.
+# Generate at https://github.com/settings/tokens/new with 'repo' scope.
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
