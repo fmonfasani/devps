@@ -7,12 +7,10 @@ jobs:
   create-admin:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-
       - name: Create admin user on VPS
         uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17
+        env:
+          SCRIPT_B64: aW1wb3J0IHNxbGl0ZTMKaW1wb3J0IHN5cwpzeXMucGF0aC5pbnNlcnQoMCwgJy9vcHQvZGV2cHMvcmVwby9hZ2VudCcpCgpmcm9tIGRldnBzX2FnZW50IGltcG9ydCBhdXRoCgp1c2VybmFtZSA9ICJmbW9uZmFzYW5pQGdtYWlsLmNvbSIKcGFzc3dvcmQgPSAiS2FyYTMwMTAiCmRiX3BhdGggPSAiL29wdC9kZXZwcy9kYXRhL3JlZ2lzdHJ5LmRiIgoKaGFzaF9oZXgsIHNhbHRfaGV4ID0gYXV0aC5oYXNoX3Bhc3N3b3JkKHBhc3N3b3JkKQoKY29ubiA9IHNxbGl0ZTMuY29ubmVjdChkYl9wYXRoKQp0cnk6CiAgICBjb25uLmV4ZWN1dGUoIiIiCiAgICAgICAgSU5TRVJUIElOVE8gdXNlcnMgKHVzZXJuYW1lLCBwYXNzd29yZF9oYXNoLCBwYXNzd29yZF9zYWx0LCByb2xlLCBjcmVhdGVkX2F0LCBjcmVhdGVkX2J5KQogICAgICAgIFZBTFVFUyAoPywgPywgPywgJ2FkbWluJywgZGF0ZXRpbWUoJ25vdycpLCBOVUxMKQogICAgIiIiLCAodXNlcm5hbWUsIGhhc2hfaGV4LCBzYWx0X2hleCkpCiAgICBjb25uLmNvbW1pdCgpCiAgICBwcmludChmIuKahiBBZG1pbiB1c2VyICd7dXNlcm5hbWV9JiBjcmVhdGVkIHN1Y2Nlc3NmdWxseSIpCmV4Y2VwdCBzcWxpdGUzLkludGVncml0eUVycm9yOgogICAgcHJpbnQoZiIhIFVzZXIgJ3t1c2VybmFtZX0nIGFscmVhZHkgZXhpc3RzICh1cGRhdGluZyBwYXNzd29yZCkiKQogICAgY29ubi5leGVjdXRlKCIiIgogICAgICAgIFVQREFURSB1c2VycyBTRVQgcGFzc3dvcmRfaGFzaCA9ID8sIHBhc3N3b3JkX3NhbHQgPSAKICAgICAgICBXSEVSRSB1c2VybmFtZSA9ID8KICAgICIiIiwgKGhhc2hfaGV4LCBzYWx0X2hleCwgdXNlcm5hbWUpKQogICAgY29ubi5jb21taXQoKQogICAgcHJpbnQoZiLimohQYXNzd29yZCB1cGRhdGVkIGZvciAne3VzZXJuYW1lfSciKQpmaW5hbGx5OgogICAgY29ubi5jbG9zZSgp
         with:
           host: ${{ secrets.HETZNER_HOST }}
           username: ${{ secrets.HETZNER_USER }}
@@ -24,35 +22,4 @@ jobs:
             cd /opt/devps/repo
             git fetch origin main
             git reset --hard origin/main
-            python3 << 'PYTHON_EOF'
-            import sqlite3
-            import sys
-            sys.path.insert(0, '/opt/devps/repo/agent')
-
-            from devps_agent import auth
-
-            username = "fmonfasani@gmail.com"
-            password = "Kara3010"
-            db_path = "/opt/devps/data/registry.db"
-
-            hash_hex, salt_hex = auth.hash_password(password)
-
-            conn = sqlite3.connect(db_path)
-            try:
-                conn.execute("""
-                    INSERT INTO users (username, password_hash, password_salt, role, created_at, created_by)
-                    VALUES (?, ?, ?, 'admin', datetime('now'), NULL)
-                """, (username, hash_hex, salt_hex))
-                conn.commit()
-                print(f"✓ Admin user '{username}' created successfully")
-            except sqlite3.IntegrityError:
-                print(f"! User '{username}' already exists (updating password)")
-                conn.execute("""
-                    UPDATE users SET password_hash = ?, password_salt = ?
-                    WHERE username = ?
-                """, (hash_hex, salt_hex, username))
-                conn.commit()
-                print(f"✓ Password updated for '{username}'")
-            finally:
-                conn.close()
-            PYTHON_EOF
+            echo "$SCRIPT_B64" | base64 -d | python3
