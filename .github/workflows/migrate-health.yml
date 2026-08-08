@@ -1,0 +1,19 @@
+name: Migrate Health Columns
+
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run health column migration
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_SSH_PORT }}
+          script_stop: false
+          script: |
+            cd /opt/devps/repo && git fetch origin && git reset --hard origin/main && /opt/devps/repo/scripts/migrate-health-columns.sh
