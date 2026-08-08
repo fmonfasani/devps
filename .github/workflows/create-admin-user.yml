@@ -1,0 +1,25 @@
+name: Create Admin User
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create-admin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Create admin user on VPS
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_SSH_PORT }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd /opt/devps/repo
+            bash infra/scripts/create-admin.sh "fmonfasani@gmail.com" "Kara3010"
