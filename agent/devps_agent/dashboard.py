@@ -288,7 +288,7 @@ async def restart_container_endpoint(request: Request, project_name: str):
         return JSONResponse({"success": False, "error": "Project not found"}, status_code=404)
 
     try:
-        rbac.require_permission(user["username"], "manage_project", project_name)
+        rbac.require_permission(user["username"], "edit_project", project_name)
     except rbac.RBACError:
         return JSONResponse({"success": False, "error": "Access denied"}, status_code=403)
 
@@ -325,7 +325,7 @@ async def get_settings_endpoint(request: Request, project_name: str):
         return JSONResponse({"success": False, "error": "Project not found"}, status_code=404)
 
     try:
-        rbac.require_permission(user["username"], "manage_project", project_name)
+        rbac.require_permission(user["username"], "edit_project", project_name)
     except rbac.RBACError:
         return JSONResponse({"success": False, "error": "Access denied"}, status_code=403)
 
@@ -363,7 +363,7 @@ async def update_settings_endpoint(request: Request, project_name: str):
         return JSONResponse({"success": False, "error": "Project not found"}, status_code=404)
 
     try:
-        rbac.require_permission(user["username"], "manage_project", project_name)
+        rbac.require_permission(user["username"], "edit_project", project_name)
     except rbac.RBACError:
         return JSONResponse({"success": False, "error": "Access denied"}, status_code=403)
 
@@ -398,7 +398,7 @@ async def mute_alerts_endpoint(request: Request, project_name: str):
         return JSONResponse({"success": False, "error": "Project not found"}, status_code=404)
 
     try:
-        rbac.require_permission(user["username"], "manage_project", project_name)
+        rbac.require_permission(user["username"], "edit_project", project_name)
     except rbac.RBACError:
         return JSONResponse({"success": False, "error": "Access denied"}, status_code=403)
 
@@ -436,7 +436,7 @@ async def unmute_alerts_endpoint(request: Request, project_name: str):
         return JSONResponse({"success": False, "error": "Project not found"}, status_code=404)
 
     try:
-        rbac.require_permission(user["username"], "manage_project", project_name)
+        rbac.require_permission(user["username"], "edit_project", project_name)
     except rbac.RBACError:
         return JSONResponse({"success": False, "error": "Access denied"}, status_code=403)
 
