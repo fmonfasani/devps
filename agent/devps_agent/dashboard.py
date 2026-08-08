@@ -2,10 +2,13 @@
 against the same DEVPS_TOKEN. No separate build step, no separate service,
 no second credential to manage."""
 
+import hashlib
+import os
+import binascii
 from pathlib import Path
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from . import auth, config, docker_ops, login_throttle, rbac, registry, repo_analysis, secrets_store
@@ -127,6 +130,119 @@ def health_status_page(request: Request):
         "health_status.html",
         {"session_authenticated": True, "health_data": list_health()},
     )
+
+
+@router.get("/dashboard/users")
+def users_page(request: Request):
+    if not _authenticated(request):
+        return RedirectResponse("/dashboard/login", status_code=303)
+
+    user = _get_user(request)
+    if not user or user.get("role") != "admin":
+        return templates.TemplateResponse(
+            request,
+            "base.html",
+            {"session_authenticated": True, "content": "<p>Access denied. Admin only.</p>"},
+        )
+
+    return templates.TemplateResponse(
+        request,
+        "users.html",
+        {
+            "session_authenticated": True,
+            "users": registry.list_users(),
+            "current_user": user,
+        },
+    )
+
+
+@router.post("/dashboard/users/create")
+async def create_user_endpoint(request: Request):
+    if not _authenticated(request):
+        return JSONResponse({"success": False, "error": "Not authenticated"}, status_code=401)
+
+    user = _get_user(request)
+    if not user or user.get("role") != "admin":
+        return JSONResponse({"success": False, "error": "Admin only"}, status_code=403)
+
+    try:
+        data = await request.json()
+        username = data.get("username", "").strip()
+        password = data.get("password", "").strip()
+        role = data.get("role", "viewer").strip()
+
+        if not username or not password:
+            return JSONResponse({"success": False, "error": "Username and password required"})
+
+        if role not in ["admin", "deployer", "viewer"]:
+            return JSONResponse({"success": False, "error": "Invalid role"})
+
+        # Check if user exists
+        if registry.get_user(username):
+            return JSONResponse({"success": False, "error": "User already exists"})
+
+        # Hash password
+        salt = os.urandom(16)
+        salt_hex = binascii.hexlify(salt).decode()
+        hash_obj = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
+        hash_hex = binascii.hexlify(hash_obj).decode()
+
+        # Create user
+        registry.create_user(username, hash_hex, salt_hex, role, created_by=user["username"])
+        return JSONResponse({"success": True})
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@router.post("/dashboard/users/update-role")
+async def update_user_role_endpoint(request: Request):
+    if not _authenticated(request):
+        return JSONResponse({"success": False, "error": "Not authenticated"}, status_code=401)
+
+    user = _get_user(request)
+    if not user or user.get("role") != "admin":
+        return JSONResponse({"success": False, "error": "Admin only"}, status_code=403)
+
+    try:
+        data = await request.json()
+        username = data.get("username", "").strip()
+        role = data.get("role", "").strip()
+
+        if not username or not role:
+            return JSONResponse({"success": False, "error": "Username and role required"})
+
+        if role not in ["admin", "deployer", "viewer"]:
+            return JSONResponse({"success": False, "error": "Invalid role"})
+
+        registry.update_user_role(username, role)
+        return JSONResponse({"success": True})
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@router.post("/dashboard/users/delete")
+async def delete_user_endpoint(request: Request):
+    if not _authenticated(request):
+        return JSONResponse({"success": False, "error": "Not authenticated"}, status_code=401)
+
+    user = _get_user(request)
+    if not user or user.get("role") != "admin":
+        return JSONResponse({"success": False, "error": "Admin only"}, status_code=403)
+
+    try:
+        data = await request.json()
+        username = data.get("username", "").strip()
+
+        if not username:
+            return JSONResponse({"success": False, "error": "Username required"})
+
+        if username == user["username"]:
+            return JSONResponse({"success": False, "error": "Cannot delete yourself"})
+
+        registry.delete_user(username)
+        return JSONResponse({"success": True})
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
 
 
 @router.get("/dashboard/projects/{name}")

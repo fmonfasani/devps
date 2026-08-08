@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+  <h1>Users & Roles</h1>
+  <button onclick="openCreateUserModal()" style="background: #2f6fed; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">
+    + Add User
+  </button>
+</div>
+
+<div style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 4px;">
+  <p style="margin: 0; color: #666;">
+    <strong>Admin:</strong> Full access to all projects and settings<br>
+    <strong>Deployer:</strong> Can create and manage their own projects<br>
+    <strong>Viewer:</strong> Read-only access to projects
+  </p>
+</div>
+
+{% if users %}
+<table style="width: 100%; border-collapse: collapse;">
+  <thead>
+    <tr style="background: #2d2d2d; border-bottom: 2px solid #444;">
+      <th style="padding: 12px; text-align: left; color: #aaa;">Username</th>
+      <th style="padding: 12px; text-align: center; color: #aaa;">Role</th>
+      <th style="padding: 12px; text-align: center; color: #aaa;">Created</th>
+      <th style="padding: 12px; text-align: center; color: #aaa;">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for user in users %}
+    <tr style="border-bottom: 1px solid #444;">
+      <td style="padding: 12px;">
+        <strong>{{ user.username }}</strong>
+      </td>
+      <td style="padding: 12px; text-align: center;">
+        {% if user.role == "admin" %}
+          <span style="background: #7c3aed; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold;">
+            🔐 Admin
+          </span>
+        {% elif user.role == "deployer" %}
+          <span style="background: #2563eb; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold;">
+            🚀 Deployer
+          </span>
+        {% elif user.role == "viewer" %}
+          <span style="background: #6b7280; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold;">
+            👁️ Viewer
+          </span>
+        {% endif %}
+      </td>
+      <td style="padding: 12px; text-align: center; color: #999; font-size: 12px;">
+        {{ user.created_at[:10] if user.created_at else "—" }}
+      </td>
+      <td style="padding: 12px; text-align: center;">
+        {% if user.username != current_user.username %}
+        <div style="display: flex; gap: 8px; justify-content: center;">
+          <button onclick="openEditRoleModal('{{ user.username }}', '{{ user.role }}')"
+                  style="background: #3b82f6; color: white; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+            Change Role
+          </button>
+          <button onclick="deleteUser('{{ user.username }}')"
+                  style="background: #ef4444; color: white; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+            Delete
+          </button>
+        </div>
+        {% else %}
+        <span style="color: #999; font-size: 12px;">(You)</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div style="padding: 40px; text-align: center; color: #666;">
+  <p>No users yet. Create one to get started.</p>
+</div>
+{% endif %}
+
+<!-- Create User Modal -->
+<div id="createUserModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+  <div style="background: #1a1a1a; border: 1px solid #444; border-radius: 8px; padding: 30px; max-width: 400px; width: 90%;">
+    <h2 style="margin-top: 0;">Create New User</h2>
+    <form onsubmit="createUser(event)">
+      <label style="display: block; margin-bottom: 20px;">
+        <span style="display: block; margin-bottom: 5px; color: #aaa;">Email/Username:</span>
+        <input type="email" id="newUsername" required style="width: 100%; padding: 8px; background: #0f1115; border: 1px solid #444; border-radius: 4px; color: white; box-sizing: border-box;">
+      </label>
+
+      <label style="display: block; margin-bottom: 20px;">
+        <span style="display: block; margin-bottom: 5px; color: #aaa;">Password:</span>
+        <input type="password" id="newPassword" required style="width: 100%; padding: 8px; background: #0f1115; border: 1px solid #444; border-radius: 4px; color: white; box-sizing: border-box;">
+      </label>
+
+      <label style="display: block; margin-bottom: 20px;">
+        <span style="display: block; margin-bottom: 5px; color: #aaa;">Role:</span>
+        <select id="newRole" required style="width: 100%; padding: 8px; background: #0f1115; border: 1px solid #444; border-radius: 4px; color: white; box-sizing: border-box;">
+          <option value="admin">🔐 Admin</option>
+          <option value="deployer">🚀 Deployer</option>
+          <option value="viewer">👁️ Viewer</option>
+        </select>
+      </label>
+
+      <div style="display: flex; gap: 10px;">
+        <button type="submit" style="flex: 1; background: #2f6fed; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer;">
+          Create
+        </button>
+        <button type="button" onclick="closeCreateUserModal()" style="flex: 1; background: #444; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer;">
+          Cancel
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Role Modal -->
+<div id="editRoleModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+  <div style="background: #1a1a1a; border: 1px solid #444; border-radius: 8px; padding: 30px; max-width: 400px; width: 90%;">
+    <h2 style="margin-top: 0;">Change User Role</h2>
+    <p id="editUsername" style="color: #aaa; margin-bottom: 20px;"></p>
+    <form onsubmit="updateUserRole(event)">
+      <label style="display: block; margin-bottom: 20px;">
+        <span style="display: block; margin-bottom: 5px; color: #aaa;">New Role:</span>
+        <select id="editRole" required style="width: 100%; padding: 8px; background: #0f1115; border: 1px solid #444; border-radius: 4px; color: white; box-sizing: border-box;">
+          <option value="admin">🔐 Admin</option>
+          <option value="deployer">🚀 Deployer</option>
+          <option value="viewer">👁️ Viewer</option>
+        </select>
+      </label>
+
+      <div style="display: flex; gap: 10px;">
+        <button type="submit" style="flex: 1; background: #2f6fed; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer;">
+          Update
+        </button>
+        <button type="button" onclick="closeEditRoleModal()" style="flex: 1; background: #444; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer;">
+          Cancel
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+let editingUsername = null;
+
+function openCreateUserModal() {
+  document.getElementById('createUserModal').style.display = 'flex';
+}
+
+function closeCreateUserModal() {
+  document.getElementById('createUserModal').style.display = 'none';
+  document.getElementById('newUsername').value = '';
+  document.getElementById('newPassword').value = '';
+  document.getElementById('newRole').value = 'deployer';
+}
+
+function openEditRoleModal(username, role) {
+  editingUsername = username;
+  document.getElementById('editUsername').textContent = username;
+  document.getElementById('editRole').value = role;
+  document.getElementById('editRoleModal').style.display = 'flex';
+}
+
+function closeEditRoleModal() {
+  document.getElementById('editRoleModal').style.display = 'none';
+  editingUsername = null;
+}
+
+function createUser(event) {
+  event.preventDefault();
+  const username = document.getElementById('newUsername').value;
+  const password = document.getElementById('newPassword').value;
+  const role = document.getElementById('newRole').value;
+
+  fetch('/dashboard/users/create', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({username, password, role})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      location.reload();
+    } else {
+      alert('Error: ' + (data.error || 'Unknown error'));
+    }
+  })
+  .catch(err => alert('Error: ' + err));
+}
+
+function updateUserRole(event) {
+  event.preventDefault();
+  const role = document.getElementById('editRole').value;
+
+  fetch('/dashboard/users/update-role', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({username: editingUsername, role})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      location.reload();
+    } else {
+      alert('Error: ' + (data.error || 'Unknown error'));
+    }
+  })
+  .catch(err => alert('Error: ' + err));
+}
+
+function deleteUser(username) {
+  if (!confirm('Delete user ' + username + '? Their projects will be orphaned.')) return;
+
+  fetch('/dashboard/users/delete', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({username})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      location.reload();
+    } else {
+      alert('Error: ' + (data.error || 'Unknown error'));
+    }
+  })
+  .catch(err => alert('Error: ' + err));
+}
+
+// Close modal when clicking outside
+document.getElementById('createUserModal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'createUserModal') closeCreateUserModal();
+});
+
+document.getElementById('editRoleModal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'editRoleModal') closeEditRoleModal();
+});
+</script>
+
+<style>
+button:hover {
+  opacity: 0.9;
+}
+</style>
+{% endblock %}
