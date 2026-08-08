@@ -7,6 +7,15 @@ from contextlib import contextmanager
 from . import config
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS users (
+    username TEXT PRIMARY KEY,
+    password_hash TEXT NOT NULL,
+    password_salt TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('admin', 'deployer', 'viewer')),
+    created_at TEXT NOT NULL,
+    created_by TEXT
+);
+
 CREATE TABLE IF NOT EXISTS projects (
     name TEXT PRIMARY KEY,
     managed_by TEXT NOT NULL CHECK (managed_by IN ('devps', 'adopted')),
@@ -20,7 +29,9 @@ CREATE TABLE IF NOT EXISTS projects (
     health_status TEXT DEFAULT 'unknown',
     restart_count INTEGER DEFAULT 0,
     last_restart_at TEXT,
-    last_health_check_at TEXT
+    last_health_check_at TEXT,
+    owner TEXT REFERENCES users(username),
+    created_by TEXT
 );
 
 CREATE TABLE IF NOT EXISTS project_ports (
@@ -40,10 +51,13 @@ CREATE TABLE IF NOT EXISTS events (
     kind TEXT NOT NULL,
     detail TEXT,
     success INTEGER NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    created_by TEXT REFERENCES users(username)
 );
 CREATE INDEX IF NOT EXISTS idx_events_project_created
     ON events (project_name, created_at);
+CREATE INDEX IF NOT EXISTS idx_events_user_created
+    ON events (created_by, created_at);
 
 -- One row per project being migrated off Coolify (or anything else) — the
 -- live version of the table in docs/MIGRATION.md. NULL timestamps mean

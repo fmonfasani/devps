@@ -18,6 +18,8 @@ def upsert_project(
     git_sha: str | None = None,
     domain: str | None = None,
     status: str = "unknown",
+    owner: str | None = None,
+    created_by: str | None = None,
 ) -> None:
     ts = _now()
     with connect() as conn:
@@ -34,9 +36,9 @@ def upsert_project(
             conn.execute(
                 """INSERT INTO projects
                    (name, managed_by, repo_url, git_ref, git_sha,
-                    domain, status, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (name, managed_by, repo_url, git_ref, git_sha, domain, status, ts, ts),
+                    domain, status, created_at, updated_at, owner, created_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (name, managed_by, repo_url, git_ref, git_sha, domain, status, ts, ts, owner, created_by),
             )
 
 
@@ -183,3 +185,56 @@ def list_migrations() -> list[dict[str, Any]]:
     with connect() as conn:
         rows = conn.execute("SELECT * FROM migrations ORDER BY project_name").fetchall()
         return [dict(r) for r in rows]
+
+
+# --- users -------------------------------------------------------------------
+
+
+def create_user(username: str, password_hash: str, password_salt: str, role: str, created_by: str | None = None) -> None:
+    """Create a new user.
+
+    Args:
+        username: Username (unique)
+        password_hash: Hashed password (PBKDF2-SHA256)
+        password_salt: Salt (hex string)
+        role: User role (admin, deployer, viewer)
+        created_by: Username of who created this user
+    """
+    ts = _now()
+    with connect() as conn:
+        conn.execute(
+            """INSERT INTO users (username, password_hash, password_salt, role, created_at, created_by)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (username, password_hash, password_salt, role, ts, created_by),
+        )
+
+
+def get_user(username: str) -> dict[str, Any] | None:
+    """Get user by username."""
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        return dict(row) if row else None
+
+
+def list_users() -> list[dict[str, Any]]:
+    """List all users (excluding password hashes for security)."""
+    with connect() as conn:
+        rows = conn.execute("SELECT username, role, created_at, created_by FROM users ORDER BY username").fetchall()
+        return [dict(r) for r in rows]
+
+
+def update_user_role(username: str, new_role: str) -> None:
+    """Update user role."""
+    with connect() as conn:
+        conn.execute("UPDATE users SET role = ? WHERE username = ?", (new_role, username))
+
+
+def delete_user(username: str) -> None:
+    """Delete a user (orphans their projects)."""
+    with connect() as conn:
+        # Set owner to NULL for projects owned by this user
+        conn.execute("UPDATE projects SET owner = NULL WHERE owner = ?", (username,))
+        # Set created_by to NULL for events created by this user
+        conn.execute("UPDATE events SET created_by = NULL WHERE created_by = ?", (username,))
+        # Delete the user
+        conn.execute("DELETE FROM users WHERE username = ?", (username,))
