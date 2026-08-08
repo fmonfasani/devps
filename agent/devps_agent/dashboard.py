@@ -2,14 +2,13 @@
 against the same DEVPS_TOKEN. No separate build step, no separate service,
 no second credential to manage."""
 
-import secrets
 from pathlib import Path
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from . import config, docker_ops, login_throttle, registry, repo_analysis, secrets_store
+from . import auth, config, docker_ops, login_throttle, registry, repo_analysis, secrets_store
 from .models import DeployRequest
 from .routers.projects import deploy as deploy_project
 
@@ -46,7 +45,7 @@ def login_form(request: Request):
 
 
 @router.post("/dashboard/login")
-def login_submit(request: Request, token: str = Form(...)):
+def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
     ip = _client_ip(request)
     if login_throttle.is_rate_limited(ip):
         return templates.TemplateResponse(
@@ -55,12 +54,24 @@ def login_submit(request: Request, token: str = Form(...)):
             {"session_authenticated": False, "error": "Too many attempts — try again later"},
             status_code=429,
         )
-    if not secrets.compare_digest(token, config.BEARER_TOKEN):
+    if not config.DASHBOARD_USERNAME or not config.DASHBOARD_PASSWORD_HASH:
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {
+                "session_authenticated": False,
+                "error": "Dashboard credentials not configured",
+            },
+            status_code=503,
+        )
+    if username != config.DASHBOARD_USERNAME or not auth.verify_password(
+        password, config.DASHBOARD_PASSWORD_SALT, config.DASHBOARD_PASSWORD_HASH
+    ):
         login_throttle.record_failure(ip)
         return templates.TemplateResponse(
             request,
             "login.html",
-            {"session_authenticated": False, "error": "Invalid token"},
+            {"session_authenticated": False, "error": "Invalid username or password"},
             status_code=401,
         )
     login_throttle.record_success(ip)

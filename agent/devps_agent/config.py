@@ -33,3 +33,9 @@ CERTBOT_EMAIL = os.environ.get("DEVPS_CERTBOT_EMAIL", "")
 # real HTTPS domain (see docs/ARCHITECTURE.md), so the cookie can't leak
 # over a plain-HTTP request.
 SESSION_HTTPS_ONLY = os.environ.get("DEVPS_SESSION_HTTPS_ONLY", "false").lower() == "true"
+
+# Dashboard authentication — username and hashed password.
+# Set via the setup-dashboard-credentials workflow.
+DASHBOARD_USERNAME = os.environ.get("DEVPS_DASHBOARD_USERNAME")
+DASHBOARD_PASSWORD_HASH = os.environ.get("DEVPS_DASHBOARD_PASSWORD_HASH")
+DASHBOARD_PASSWORD_SALT = os.environ.get("DEVPS_DASHBOARD_PASSWORD_SALT")
