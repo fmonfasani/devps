@@ -39,3 +39,8 @@ SESSION_HTTPS_ONLY = os.environ.get("DEVPS_SESSION_HTTPS_ONLY", "false").lower()
 DASHBOARD_USERNAME = os.environ.get("DEVPS_DASHBOARD_USERNAME")
 DASHBOARD_PASSWORD_HASH = os.environ.get("DEVPS_DASHBOARD_PASSWORD_HASH")
 DASHBOARD_PASSWORD_SALT = os.environ.get("DEVPS_DASHBOARD_PASSWORD_SALT")
+
+# Webhook secret for GitHub (HMAC-SHA256 validation).
+# Generate: python3 -c "import secrets; print(secrets.token_hex(32))"
+# Set as GitHub webhook secret in repo settings.
+WEBHOOK_SECRET = os.environ.get("DEVPS_WEBHOOK_SECRET")
