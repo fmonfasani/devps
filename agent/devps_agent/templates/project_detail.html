@@ -23,7 +23,20 @@
 
 {% if project.managed_by == "devps" %}
 <div class="card">
-  <h3>Health Status</h3>
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h3 style="margin: 0;">Health Status</h3>
+    <div style="display: flex; gap: 0.5rem;">
+      <button onclick="openLogsModal()" style="background: #2f6fed; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">
+        📋 View Logs
+      </button>
+      <button onclick="openRestartModal()" style="background: #f59e0b; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">
+        🔄 Restart
+      </button>
+      <button onclick="openSettingsModal()" style="background: #6366f1; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">
+        ⚙️ Settings
+      </button>
+    </div>
+  </div>
   <table>
     <tr><th>Status</th><td>
       <span class="badge badge-{{ 'ok' if project.health_status == 'running' else 'fail' }}">{{ project.health_status or "unknown" }}</span>
@@ -38,6 +51,200 @@
   </p>
   {% endif %}
 </div>
+
+<!-- Logs Modal -->
+<div id="logsModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; padding: 20px;">
+  <div style="background: #161923; border: 1px solid #262b3a; border-radius: 8px; max-width: 90%; width: 900px; height: 80vh; margin: 0 auto; display: flex; flex-direction: column;">
+    <div style="padding: 1rem 1.5rem; border-bottom: 1px solid #262b3a; display: flex; justify-content: space-between; align-items: center;">
+      <h2 style="margin: 0;">Container Logs</h2>
+      <button onclick="closeLogsModal()" style="background: none; border: none; color: #9aa4b2; font-size: 1.5rem; cursor: pointer;">×</button>
+    </div>
+    <div style="flex: 1; padding: 1rem 1.5rem; overflow-y: auto;">
+      <pre id="logsContent" class="logs" style="margin: 0;">Loading...</pre>
+    </div>
+    <div style="padding: 1rem 1.5rem; border-top: 1px solid #262b3a; display: flex; gap: 0.5rem; justify-content: flex-end;">
+      <button onclick="downloadLogs()" style="background: #6ea8fe; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">
+        📥 Download
+      </button>
+      <button onclick="closeLogsModal()" style="background: #3a3f4a; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">
+        Close
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Restart Modal -->
+<div id="restartModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center;">
+  <div style="background: #161923; border: 1px solid #262b3a; border-radius: 8px; padding: 2rem; max-width: 400px; width: 90%;">
+    <h2 style="margin-top: 0;">Restart Container?</h2>
+    <p style="color: #9aa4b2;">This will restart the container immediately. In-flight requests may be lost.</p>
+    <div style="display: flex; gap: 1rem;">
+      <button onclick="executeRestart()" id="restartBtn" style="flex: 1; background: #f59e0b; color: white; border: none; padding: 0.75rem; border-radius: 4px; cursor: pointer; font-weight: 600;">
+        Restart Now
+      </button>
+      <button onclick="closeRestartModal()" style="flex: 1; background: #3a3f4a; color: white; border: none; padding: 0.75rem; border-radius: 4px; cursor: pointer;">
+        Cancel
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div id="settingsModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center;">
+  <div style="background: #161923; border: 1px solid #262b3a; border-radius: 8px; padding: 2rem; max-width: 500px; width: 90%;">
+    <h2 style="margin-top: 0;">Alert Settings</h2>
+    <form onsubmit="saveSettings(event)">
+      <label style="display: block; margin-bottom: 1.5rem;">
+        <input type="checkbox" id="alertEnabled" style="margin-right: 0.5rem;">
+        <span style="color: #9aa4b2;">Enable alerts for this project</span>
+      </label>
+      <label style="display: block; margin-bottom: 1.5rem;">
+        <span style="display: block; margin-bottom: 0.5rem; color: #9aa4b2;">Email address:</span>
+        <input type="email" id="alertEmail" placeholder="your@email.com" style="width: 100%; padding: 0.5rem; background: #0f1115; border: 1px solid #262b3a; border-radius: 4px; color: inherit; box-sizing: border-box;">
+      </label>
+      <label style="display: block; margin-bottom: 1.5rem;">
+        <span style="display: block; margin-bottom: 0.5rem; color: #9aa4b2;">Slack webhook URL:</span>
+        <input type="text" id="alertSlack" placeholder="https://hooks.slack.com/..." style="width: 100%; padding: 0.5rem; background: #0f1115; border: 1px solid #262b3a; border-radius: 4px; color: inherit; box-sizing: border-box;">
+      </label>
+      <div style="display: flex; gap: 1rem;">
+        <button type="submit" style="flex: 1; background: #6ea8fe; color: white; border: none; padding: 0.75rem; border-radius: 4px; cursor: pointer; font-weight: 600;">
+          Save
+        </button>
+        <button type="button" onclick="closeSettingsModal()" style="flex: 1; background: #3a3f4a; color: white; border: none; padding: 0.75rem; border-radius: 4px; cursor: pointer;">
+          Cancel
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const projectName = "{{ project.name }}";
+
+function openLogsModal() {
+  document.getElementById('logsModal').style.display = 'flex';
+  document.getElementById('logsContent').textContent = 'Loading...';
+  fetch(`/dashboard/api/logs/${projectName}?tail=500`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        document.getElementById('logsContent').textContent = data.logs;
+      } else {
+        document.getElementById('logsContent').textContent = 'Error: ' + data.error;
+      }
+    })
+    .catch(e => {
+      document.getElementById('logsContent').textContent = 'Error: ' + e.message;
+    });
+}
+
+function closeLogsModal() {
+  document.getElementById('logsModal').style.display = 'none';
+}
+
+function downloadLogs() {
+  const content = document.getElementById('logsContent').textContent;
+  const blob = new Blob([content], {type: 'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${projectName}-logs-${new Date().toISOString().split('T')[0]}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function openRestartModal() {
+  document.getElementById('restartModal').style.display = 'flex';
+}
+
+function closeRestartModal() {
+  document.getElementById('restartModal').style.display = 'none';
+}
+
+function executeRestart() {
+  const btn = document.getElementById('restartBtn');
+  btn.disabled = true;
+  btn.textContent = 'Restarting...';
+
+  fetch(`/dashboard/api/restart/${projectName}`, {method: 'POST'})
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        alert('Container restarted successfully');
+        closeRestartModal();
+        location.reload();
+      } else {
+        alert('Error: ' + data.error);
+        btn.disabled = false;
+        btn.textContent = 'Restart Now';
+      }
+    })
+    .catch(e => {
+      alert('Error: ' + e.message);
+      btn.disabled = false;
+      btn.textContent = 'Restart Now';
+    });
+}
+
+function openSettingsModal() {
+  document.getElementById('settingsModal').style.display = 'flex';
+  document.getElementById('alertEmail').value = '';
+  document.getElementById('alertSlack').value = '';
+  document.getElementById('alertEnabled').checked = false;
+
+  fetch(`/dashboard/api/settings/${projectName}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        document.getElementById('alertEmail').value = data.alert_email;
+        document.getElementById('alertSlack').value = data.alert_slack;
+        document.getElementById('alertEnabled').checked = data.alert_enabled;
+      }
+    });
+}
+
+function closeSettingsModal() {
+  document.getElementById('settingsModal').style.display = 'none';
+}
+
+function saveSettings(e) {
+  e.preventDefault();
+  const payload = {
+    alert_email: document.getElementById('alertEmail').value,
+    alert_slack: document.getElementById('alertSlack').value,
+    alert_enabled: document.getElementById('alertEnabled').checked,
+  };
+
+  fetch(`/dashboard/api/settings/${projectName}`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      alert('Settings saved');
+      closeSettingsModal();
+    } else {
+      alert('Error: ' + data.error);
+    }
+  })
+  .catch(e => alert('Error: ' + e.message));
+}
+
+// Close modals when clicking outside
+document.getElementById('logsModal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'logsModal') closeLogsModal();
+});
+
+document.getElementById('restartModal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'restartModal') closeRestartModal();
+});
+
+document.getElementById('settingsModal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'settingsModal') closeSettingsModal();
+});
+</script>
 {% endif %}
 
 {% if migration %}

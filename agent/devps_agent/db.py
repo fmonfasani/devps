@@ -74,10 +74,25 @@ CREATE TABLE IF NOT EXISTS migrations (
 """
 
 
+def _migrate_alert_columns() -> None:
+    """Add alert columns to projects table if missing."""
+    with connect() as conn:
+        for col, col_type, default in [
+            ("alert_email", "TEXT", "NULL"),
+            ("alert_slack", "TEXT", "NULL"),
+            ("alert_enabled", "INTEGER", "1"),
+        ]:
+            try:
+                conn.execute(f"ALTER TABLE projects ADD COLUMN {col} {col_type} DEFAULT {default}")
+            except sqlite3.OperationalError:
+                pass
+
+
 def init_db() -> None:
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     with connect() as conn:
         conn.executescript(SCHEMA)
+    _migrate_alert_columns()
 
 
 @contextmanager

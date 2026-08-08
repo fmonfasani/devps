@@ -15,6 +15,7 @@ from . import auth, config, docker_ops, login_throttle, rbac, registry, repo_ana
 from .models import DeployRequest
 from .routers.health_status import list_health
 from .routers.projects import deploy as deploy_project
+from .db import connect
 
 router = APIRouter(include_in_schema=False)
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -240,6 +241,144 @@ async def delete_user_endpoint(request: Request):
             return JSONResponse({"success": False, "error": "Cannot delete yourself"})
 
         registry.delete_user(username)
+        return JSONResponse({"success": True})
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@router.get("/dashboard/api/logs/{project_name}")
+async def get_logs_endpoint(request: Request, project_name: str):
+    if not _authenticated(request):
+        return JSONResponse({"success": False, "error": "Not authenticated"}, status_code=401)
+
+    user = _get_user(request)
+    if not user:
+        return JSONResponse({"success": False, "error": "Not authenticated"}, status_code=401)
+
+    project = registry.get_project(project_name)
+    if not project:
+        return JSONResponse({"success": False, "error": "Project not found"}, status_code=404)
+
+    try:
+        rbac.require_permission(user["username"], "view_project", project_name)
+    except rbac.RBACError:
+        return JSONResponse({"success": False, "error": "Access denied"}, status_code=403)
+
+    tail = int(request.query_params.get("tail", 200))
+    tail = max(10, min(tail, 1000))
+
+    try:
+        logs = docker_ops.container_logs(project_name, tail)
+        return JSONResponse({"success": True, "logs": logs})
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@router.post("/dashboard/api/restart/{project_name}")
+async def restart_container_endpoint(request: Request, project_name: str):
+    if not _authenticated(request):
+        return JSONResponse({"success": False, "error": "Not authenticated"}, status_code=401)
+
+    user = _get_user(request)
+    if not user:
+        return JSONResponse({"success": False, "error": "Not authenticated"}, status_code=401)
+
+    project = registry.get_project(project_name)
+    if not project:
+        return JSONResponse({"success": False, "error": "Project not found"}, status_code=404)
+
+    try:
+        rbac.require_permission(user["username"], "manage_project", project_name)
+    except rbac.RBACError:
+        return JSONResponse({"success": False, "error": "Access denied"}, status_code=403)
+
+    if project["managed_by"] != "devps":
+        return JSONResponse({"success": False, "error": "Project not managed by devps"})
+
+    try:
+        project_dir = Path(config.PROJECTS_DIR) / project_name
+        docker_ops.compose_restart(project_dir, "docker-compose.yml")
+
+        from datetime import datetime
+        with connect() as conn:
+            conn.execute(
+                "INSERT INTO events (project_name, kind, detail, success, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?)",
+                (project_name, "manual_restart", f"Restarted by {user['username']}", 1, datetime.utcnow().isoformat() + "Z", user['username']),
+            )
+
+        return JSONResponse({"success": True, "message": "Container restarted"})
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@router.get("/dashboard/api/settings/{project_name}")
+async def get_settings_endpoint(request: Request, project_name: str):
+    if not _authenticated(request):
+        return JSONResponse({"success": False, "error": "Not authenticated"}, status_code=401)
+
+    user = _get_user(request)
+    if not user:
+        return JSONResponse({"success": False, "error": "Not authenticated"}, status_code=401)
+
+    project = registry.get_project(project_name)
+    if not project:
+        return JSONResponse({"success": False, "error": "Project not found"}, status_code=404)
+
+    try:
+        rbac.require_permission(user["username"], "manage_project", project_name)
+    except rbac.RBACError:
+        return JSONResponse({"success": False, "error": "Access denied"}, status_code=403)
+
+    try:
+        with connect() as conn:
+            row = conn.execute(
+                "SELECT alert_email, alert_slack, alert_enabled FROM projects WHERE name = ?",
+                (project_name,),
+            ).fetchone()
+
+        if not row:
+            return JSONResponse({"success": False, "error": "Project not found"})
+
+        return JSONResponse({
+            "success": True,
+            "alert_email": row[0] or "",
+            "alert_slack": row[1] or "",
+            "alert_enabled": bool(row[2]),
+        })
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@router.post("/dashboard/api/settings/{project_name}")
+async def update_settings_endpoint(request: Request, project_name: str):
+    if not _authenticated(request):
+        return JSONResponse({"success": False, "error": "Not authenticated"}, status_code=401)
+
+    user = _get_user(request)
+    if not user:
+        return JSONResponse({"success": False, "error": "Not authenticated"}, status_code=401)
+
+    project = registry.get_project(project_name)
+    if not project:
+        return JSONResponse({"success": False, "error": "Project not found"}, status_code=404)
+
+    try:
+        rbac.require_permission(user["username"], "manage_project", project_name)
+    except rbac.RBACError:
+        return JSONResponse({"success": False, "error": "Access denied"}, status_code=403)
+
+    try:
+        data = await request.json()
+        alert_email = (data.get("alert_email") or "").strip()
+        alert_slack = (data.get("alert_slack") or "").strip()
+        alert_enabled = bool(data.get("alert_enabled"))
+
+        with connect() as conn:
+            conn.execute(
+                "UPDATE projects SET alert_email = ?, alert_slack = ?, alert_enabled = ? WHERE name = ?",
+                (alert_email or None, alert_slack or None, alert_enabled, project_name),
+            )
+
         return JSONResponse({"success": True})
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)})
