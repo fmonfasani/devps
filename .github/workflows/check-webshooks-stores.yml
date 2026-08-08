@@ -1,0 +1,57 @@
+name: Check webshooks.com store sites (read-only)
+
+# One-off diagnostic. The VPS audit showed no running container on ports
+# 31002-31005, which zapateria/forrajeria/electronica/tienda.webshooks.com
+# all proxy_pass to — this checks whether those sites are actually down
+# (public HTTP check, no SSH needed) and whether anything listens on those
+# ports locally (SSH check). Writes nothing, changes nothing.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  check-public:
+    name: Check public HTTP status (no SSH)
+    runs-on: ubuntu-latest
+    steps:
+      - name: curl each store domain
+        run: |
+          for d in zapateria.webshooks.com forrajeria.webshooks.com electronica.webshooks.com tienda.webshooks.com webshooks.com; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "https://$d/" || echo "curl-failed")
+            echo "$d -> $code"
+          done
+
+  check-local:
+    name: Check local ports + docker on the VPS
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH check
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
+          script_stop: false
+          script: |
+            echo "===== listening on 31002-31005? ====="
+            ss -tlnp 2>/dev/null | grep -E ':3100[2-5]' || echo "nothing listening on 31002-31005"
+
+            echo "===== local proxy_pass targets ====="
+            for p in 31002 31003 31004 31005; do
+              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:$p/" || echo "conn-failed")
+              echo "127.0.0.1:$p -> $code"
+            done
+
+            echo "===== /opt/webshooks contents ====="
+            ls -la /opt/webshooks/ 2>/dev/null || echo "not present"
+            find /opt/webshooks -maxdepth 2 -iname 'docker-compose*.yml' 2>/dev/null
+
+            echo "===== any docker compose project matching webshooks/zapateria/forrajeria/electronica/tienda ====="
+            docker compose ls -a 2>/dev/null | grep -iE 'webshooks|zapateria|forrajeria|electronica|tienda' || echo "none found in docker compose ls"
+
+            echo "===== any container, running or not, matching those names ====="
+            docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' | grep -iE 'webshooks|zapateria|forrajeria|electronica|tienda' || echo "none found in docker ps -a"
