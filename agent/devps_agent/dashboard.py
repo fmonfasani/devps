@@ -80,10 +80,7 @@ def login_submit(request: Request, username: str = Form(...), password: str = Fo
 
 @router.get("/dashboard/logout")
 def logout(request: Request):
-    username = request.session.get("username")
     request.session.clear()
-    if username:
-        registry.log_event(None, "dashboard_logout", f"user {username} logged out", success=True)
     return RedirectResponse("/dashboard/login", status_code=303)
 
 
