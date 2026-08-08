@@ -16,7 +16,11 @@ CREATE TABLE IF NOT EXISTS projects (
     domain TEXT,
     status TEXT NOT NULL DEFAULT 'unknown',
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    health_status TEXT DEFAULT 'unknown',
+    restart_count INTEGER DEFAULT 0,
+    last_restart_at TEXT,
+    last_health_check_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS project_ports (

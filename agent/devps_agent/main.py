@@ -1,11 +1,12 @@
+import asyncio
 import secrets
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import config, dashboard
+from . import config, dashboard, health_checks
 from .db import init_db
 from .routers import health, meta, projects, webhooks
 
@@ -19,7 +20,14 @@ def verify_token(authorization: str = Header(...)) -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     init_db()
-    yield
+    # Start background health check loop
+    health_task = asyncio.create_task(health_checks.health_check_loop())
+    try:
+        yield
+    finally:
+        health_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await health_task
 
 
 app = FastAPI(title="devps agent", lifespan=lifespan)
