@@ -22,4 +22,37 @@ jobs:
           script: |
             set -euo pipefail
             cd /opt/devps/repo
-            bash infra/scripts/create-admin.sh "fmonfasani@gmail.com" "Kara3010"
+            git fetch origin main
+            git reset --hard origin/main
+            python3 << 'PYTHON_EOF'
+            import sqlite3
+            import sys
+            sys.path.insert(0, '/opt/devps/repo/agent')
+
+            from devps_agent import auth
+
+            username = "fmonfasani@gmail.com"
+            password = "Kara3010"
+            db_path = "/opt/devps/data/registry.db"
+
+            hash_hex, salt_hex = auth.hash_password(password)
+
+            conn = sqlite3.connect(db_path)
+            try:
+                conn.execute("""
+                    INSERT INTO users (username, password_hash, password_salt, role, created_at, created_by)
+                    VALUES (?, ?, ?, 'admin', datetime('now'), NULL)
+                """, (username, hash_hex, salt_hex))
+                conn.commit()
+                print(f"✓ Admin user '{username}' created successfully")
+            except sqlite3.IntegrityError:
+                print(f"! User '{username}' already exists (updating password)")
+                conn.execute("""
+                    UPDATE users SET password_hash = ?, password_salt = ?
+                    WHERE username = ?
+                """, (hash_hex, salt_hex, username))
+                conn.commit()
+                print(f"✓ Password updated for '{username}'")
+            finally:
+                conn.close()
+            PYTHON_EOF
