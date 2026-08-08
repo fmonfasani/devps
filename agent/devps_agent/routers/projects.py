@@ -52,7 +52,7 @@ def deploy(name: str, req: DeployRequest) -> dict:
         env[f"DEVPS_PORT_{service.upper()}"] = str(host_port)
 
     try:
-        docker_ops.compose_up(project_dir, req.compose_file, env)
+        docker_ops.compose_up(project_dir, req.compose_file, env, req.env_file)
     except docker_ops.CommandError as e:
         registry.upsert_project(
             name, "devps", req.repo_url, req.git_ref, git_sha, req.domain, "build_failed"

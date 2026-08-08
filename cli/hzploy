@@ -11,7 +11,8 @@ Usage:
     hzploy login <url> <token>
     hzploy list
     hzploy up <name> <repo_url> [--ref main] [--domain d] \\
-        --service name=port [--service name2=port2 ...] [--primary name]
+        --service name=port [--service name2=port2 ...] [--primary name] \\
+        [--compose-file path] [--env-file path]
     hzploy adopt <name> <container_name> [--domain d]
     hzploy logs <name> [--tail 200]
     hzploy restart <name>
@@ -95,6 +96,8 @@ def cmd_up(args: argparse.Namespace) -> None:
         "domain": args.domain,
         "services": services,
         "primary_service": args.primary,
+        "compose_file": args.compose_file,
+        "env_file": args.env_file,
     }
     print(json.dumps(call("POST", f"/projects/{args.name}/deploy", body), indent=2))
 
@@ -138,6 +141,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--service", action="append", metavar="name=port", help="repeatable, e.g. --service web=3000"
     )
     p.add_argument("--primary", help="which --service is public; required with --domain")
+    p.add_argument("--compose-file", dest="compose_file", default="docker-compose.yml")
+    p.add_argument(
+        "--env-file",
+        dest="env_file",
+        help="path to a secrets env file already on the VPS, passed to `docker compose --env-file`",
+    )
     p.set_defaults(func=cmd_up)
 
     p = sub.add_parser("adopt", help="register an already-running container")

@@ -17,6 +17,14 @@ python cli/hzploy up mi-proyecto https://github.com/tuusuario/mi-repo.git \
     --domain mi-proyecto.tudominio.com
 ```
 
+Si tu `docker-compose.yml` no está en la raíz del repo, agregá
+`--compose-file ruta/al/docker-compose.yml`.
+
+Si el proyecto necesita secretos que ya viven en la VPS (claves de cifrado,
+tokens de terceros) en vez de generarlos por acá, agregá
+`--env-file /ruta/al/archivo.env` — se lo pasa a `docker compose --env-file`
+tal cual. Solo viaja la ruta por la API, nunca el contenido del archivo.
+
 ## Opción B — desde GitHub Actions (recomendado para lo tuyo)
 
 En el repo del proyecto, agregar `.github/workflows/deploy.yml`:

@@ -14,6 +14,11 @@ class DeployRequest(BaseModel):
     services: dict[str, int]
     # which key of `services` gets the nginx vhost; required if domain is set
     primary_service: str | None = None
+    # path to an env file already present on the VPS (e.g. hand-provisioned
+    # secrets like encryption keys or third-party API tokens) — passed to
+    # `docker compose --env-file`. Only a path travels through this API,
+    # never secret values themselves.
+    env_file: str | None = None
 
     @model_validator(mode="after")
     def _primary_required_with_domain(self) -> "DeployRequest":
