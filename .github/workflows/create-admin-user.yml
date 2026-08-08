@@ -9,17 +9,18 @@ jobs:
     steps:
       - name: Create admin user on VPS
         uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17
-        env:
-          SCRIPT_B64: aW1wb3J0IHNxbGl0ZTMKaW1wb3J0IGhhc2hsaWIKaW1wb3J0IG9zCmltcG9ydCBiaW5hc2NpaQoKdXNlcm5hbWUgPSAiZm1vbmZhc2FuaUBnbWFpbC5jb20iCnBhc3N3b3JkID0gIkthcmEzMDEwIgpkYl9wYXRoID0gIi9vcHQvZGV2cHMvZGF0YS9yZWdpc3RyeS5kYiIKaXRlcmF0aW9ucyA9IDEwMDAwMAoKc2FsdCA9IG9zLnVyYW5kb20oMTYpCnNhbHRfaGV4ID0gYmluYXNjaWkuaGV4bGlmeShzYWx0KS5kZWNvZGUoKQoKaGFzaF9vYmogPSBoYXNobGliLnBia2RmMl9obWFjKAogICAgJ3NoYTI1NicsCiAgICBwYXNzd29yZC5lbmNvZGUoJ3V0Zi04JyksCiAgICBzYWx0LAogICAgaXRlcmF0aW9ucwopCmhhc2hfaGV4ID0gYmluYXNjaWkuaGV4bGlmeShoYXNoX29iaikuZGVjb2RlKCkKCmNvbm4gPSBzcWxpdGUzLmNvbm5lY3QoZGJfcGF0aCkKdHJ5OgogICAgY29ubi5leGVjdXRlKCJJTlNFUlQgSU5UTyB1c2VycyAodXNlcm5hbWUsIHBhc3N3b3JkX2hhc2gsIHBhc3N3b3JkX3NhbHQsIHJvbGUsIGNyZWF0ZWRfYXQsIGNyZWF0ZWRfYnkpIFZBTFVFUyAoPywgPywgPywgJ2FkbWluJywgZGF0ZXRpbWUoJ25vdycpLCBOVUxMKSIsICh1c2VybmFtZSwgaGFzaF9oZXgsIHNhbHRfaGV4KSkKICAgIGNvbm4uY29tbWl0KCkKICAgIHByaW50KCJPSyBBZG1pbiB1c2VyIGNyZWF0ZWQiKQpleGNlcHQgc3FsaXRlMy5JbnRlZ3JpdHlFcnJvcjoKICAgIGNvbm4uZXhlY3V0ZSgiVVBEQVRFIHVzZXJzIFNFVCBwYXNzd29yZF9oYXNoID0gPywgcGFzc3dvcmRfc2FsdCA9ID8gV0hFUkUgdXNlcm5hbWUgPSA/IiwgKGhhc2hfaGV4LCBzYWx0X2hleCwgdXNlcm5hbWUpKQogICAgY29ubi5jb21taXQoKQogICAgcHJpbnQoIk9LIFBhc3N3b3JkIHVwZGF0ZWQiKQpmaW5hbGx5OgogICAgY29ubi5jbG9zZSgp
         with:
           host: ${{ secrets.HETZNER_HOST }}
           username: ${{ secrets.HETZNER_USER }}
           key: ${{ secrets.HETZNER_SSH_KEY }}
           port: ${{ secrets.HETZNER_SSH_PORT }}
           script_stop: true
+          envs: SCRIPT_B64
           script: |
             set -euo pipefail
             cd /opt/devps/repo
             git fetch origin main
             git reset --hard origin/main
             echo "$SCRIPT_B64" | base64 -d | python3
+        env:
+          SCRIPT_B64: aW1wb3J0IHNxbGl0ZTMKaW1wb3J0IGhhc2hsaWIKaW1wb3J0IG9zCmltcG9ydCBiaW5hc2NpaQoKdXNlcm5hbWUgPSAiZm1vbmZhc2FuaUBnbWFpbC5jb20iCnBhc3N3b3JkID0gIkthcmEzMDEwIgpkYl9wYXRoID0gIi9vcHQvZGV2cHMvZGF0YS9yZWdpc3RyeS5kYiIKaXRlcmF0aW9ucyA9IDEwMDAwMAoKc2FsdCA9IG9zLnVyYW5kb20oMTYpCnNhbHRfaGV4ID0gYmluYXNjaWkuaGV4bGlmeShzYWx0KS5kZWNvZGUoKQoKaGFzaF9vYmogPSBoYXNobGliLnBia2RmMl9obWFjKAogICAgJ3NoYTI1NicsCiAgICBwYXNzd29yZC5lbmNvZGUoJ3V0Zi04JyksCiAgICBzYWx0LAogICAgaXRlcmF0aW9ucwopCmhhc2hfaGV4ID0gYmluYXNjaWkuaGV4bGlmeShoYXNoX29iaikuZGVjb2RlKCkKCmNvbm4gPSBzcWxpdGUzLmNvbm5lY3QoZGJfcGF0aCkKdHJ5OgogICAgY29ubi5leGVjdXRlKCJJTlNFUlQgSU5UTyB1c2VycyAodXNlcm5hbWUsIHBhc3N3b3JkX2hhc2gsIHBhc3N3b3JkX3NhbHQsIHJvbGUsIGNyZWF0ZWRfYXQsIGNyZWF0ZWRfYnkpIFZBTFVFUyAoPywgPywgPywgJ2FkbWluJywgZGF0ZXRpbWUoJ25vdycpLCBOVUxMKSIsICh1c2VybmFtZSwgaGFzaF9oZXgsIHNhbHRfaGV4KSkKICAgIGNvbm4uY29tbWl0KCkKICAgIHByaW50KCJPSyBBZG1pbiB1c2VyIGNyZWF0ZWQiKQpleGNlcHQgc3FsaXRlMy5JbnRlZ3JpdHlFcnJvcjoKICAgIGNvbm4uZXhlY3V0ZSgiVVBEQVRFIHVzZXJzIFNFVCBwYXNzd29yZF9oYXNoID0gPywgcGFzc3dvcmRfc2FsdCA9ID8gV0hFUkUgdXNlcm5hbWUgPSA/IiwgKGhhc2hfaGV4LCBzYWx0X2hleCwgdXNlcm5hbWUpKQogICAgY29ubi5jb21taXQoKQogICAgcHJpbnQoIk9LIFBhc3N3b3JkIHVwZGF0ZWQiKQpmaW5hbGx5OgogICAgY29ubi5jbG9zZSgp
