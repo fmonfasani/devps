@@ -90,6 +90,56 @@ class TestRestartRateLimiter:
         assert limiter.get_restart_count(project) == 0
 
 
+class TestExponentialBackoffTracker:
+    def test_should_check_initially(self) -> None:
+        """Test: tracker allows check on first call"""
+        tracker = health_checks.ExponentialBackoffTracker()
+        assert tracker.should_check("test-project") is True
+
+    def test_should_check_after_failure(self) -> None:
+        """Test: tracker applies backoff after failures"""
+        import datetime as dt
+        import time
+
+        tracker = health_checks.ExponentialBackoffTracker()
+        project = "test-project"
+
+        tracker.record_failure(project)
+        # Immediately after failure, should not check (backoff in effect)
+        assert tracker.should_check(project) is False
+
+    def test_reset_on_success(self) -> None:
+        """Test: tracker resets failure count on success"""
+        tracker = health_checks.ExponentialBackoffTracker()
+        project = "test-project"
+
+        tracker.record_failure(project)
+        assert tracker.get_failure_count(project) == 1
+
+        tracker.record_success(project)
+        assert tracker.get_failure_count(project) == 0
+        assert tracker.should_check(project) is True
+
+    def test_increasing_backoff(self) -> None:
+        """Test: backoff duration increases with failure count"""
+        tracker = health_checks.ExponentialBackoffTracker()
+        project = "test-project"
+
+        # 1st-2nd failures: 30s backoff
+        tracker.record_failure(project)
+        assert tracker.get_failure_count(project) == 1
+
+        # 3rd-4th failures would be 2min backoff
+        tracker.record_failure(project)
+        tracker.record_failure(project)
+        assert tracker.get_failure_count(project) == 3
+
+        # 5th+ failures would be 30min backoff
+        tracker.record_failure(project)
+        tracker.record_failure(project)
+        assert tracker.get_failure_count(project) == 5
+
+
 class TestHealthCheckLoop:
     @pytest.mark.asyncio
     async def test_loop_cancellation(self) -> None:

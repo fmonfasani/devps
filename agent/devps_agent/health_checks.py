@@ -51,7 +51,54 @@ class RestartRateLimiter:
         return len(self.restart_times[project_name])
 
 
+class ExponentialBackoffTracker:
+    """Tracks consecutive failures and applies exponential backoff.
+
+    After repeated failures, waits increasingly longer before retrying:
+    - 1st-2nd failure: check again in 30s
+    - 3rd-4th failure: check again in 2min
+    - 5th+ failure: check again in 30min
+    """
+
+    def __init__(self) -> None:
+        self.failure_count: dict[str, int] = defaultdict(int)
+        self.last_failure_time: dict[str, datetime] = {}
+
+    def should_check(self, project_name: str) -> bool:
+        """Check if enough time has passed to try health check again."""
+        if project_name not in self.last_failure_time:
+            return True
+
+        last_time = self.last_failure_time[project_name]
+        fail_count = self.failure_count[project_name]
+
+        # Calculate backoff delay based on failure count
+        if fail_count < 2:
+            delay = timedelta(seconds=30)
+        elif fail_count < 4:
+            delay = timedelta(minutes=2)
+        else:
+            delay = timedelta(minutes=30)
+
+        return datetime.now(UTC) >= last_time + delay
+
+    def record_failure(self, project_name: str) -> None:
+        """Record a health check failure."""
+        self.failure_count[project_name] += 1
+        self.last_failure_time[project_name] = datetime.now(UTC)
+
+    def record_success(self, project_name: str) -> None:
+        """Reset failure counter on success."""
+        self.failure_count[project_name] = 0
+        self.last_failure_time.pop(project_name, None)
+
+    def get_failure_count(self, project_name: str) -> int:
+        """Get current failure count."""
+        return self.failure_count[project_name]
+
+
 _restart_limiter = RestartRateLimiter()
+_backoff_tracker = ExponentialBackoffTracker()
 
 
 def check_container_health(project_name: str) -> str:
@@ -169,7 +216,7 @@ async def health_check_loop() -> None:
     """Background health monitoring loop.
 
     Runs every CHECK_INTERVAL seconds:
-    1. Check health of each deployed project
+    1. Check health of each deployed project (with exponential backoff on failures)
     2. If dead → auto-restart
     3. Track restart count and timestamps
     4. Log events
@@ -187,26 +234,35 @@ async def health_check_loop() -> None:
                 if project["managed_by"] != "devps":
                     continue
 
+                project_name = project["name"]
+
+                # Apply exponential backoff: skip health check if we're in backoff period
+                if not _backoff_tracker.should_check(project_name):
+                    continue
+
                 try:
-                    health = check_container_health(project["name"])
-                    update_health_status(project["name"], health)
+                    health = check_container_health(project_name)
+                    update_health_status(project_name, health)
+                    _backoff_tracker.record_success(project_name)
 
                     if health == "dead":
-                        restart_container(project["name"])
+                        restart_container(project_name)
                     elif health == "unhealthy":
                         # Log but don't auto-restart (let user investigate)
                         registry.log_event(
-                            project["name"],
+                            project_name,
                             "health_check",
                             "container unhealthy, manual intervention may be needed",
                             success=True,
                         )
 
                 except HealthCheckError as e:
+                    _backoff_tracker.record_failure(project_name)
+                    fail_count = _backoff_tracker.get_failure_count(project_name)
                     registry.log_event(
-                        project["name"],
+                        project_name,
                         "health_check",
-                        f"health check failed: {e}",
+                        f"health check failed ({fail_count}x): {e}",
                         success=False,
                     )
 
