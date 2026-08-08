@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import config, dashboard, health_checks
@@ -37,6 +38,13 @@ app = FastAPI(title="devps agent", lifespan=lifespan)
 app.add_middleware(
     SessionMiddleware, secret_key=config.BEARER_TOKEN, https_only=config.SESSION_HTTPS_ONLY
 )
+
+
+@app.get("/")
+def root_redirect() -> RedirectResponse:
+    """Redirect root to dashboard login."""
+    return RedirectResponse(url="/dashboard/login", status_code=302)
+
 
 app.include_router(health.router)
 app.include_router(projects.router, dependencies=[Depends(verify_token)])
