@@ -1,0 +1,23 @@
+name: Check Users
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check users in DB
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_SSH_PORT }}
+          script_stop: true
+          envs: CHECK_SCRIPT
+          script: |
+            set -euo pipefail
+            echo "$CHECK_SCRIPT" | base64 -d | python3
+        env:
+          CHECK_SCRIPT: aW1wb3J0IHNxbGl0ZTMKY29ubiA9IHNxbGl0ZTMuY29ubmVjdCgiL29wdC9kZXZwcy9kYXRhL3JlZ2lzdHJ5LmRiIikKY29ubi5yb3dfZmFjdG9yeSA9IHNxbGl0ZTMuUm93CmN1cnNvciA9IGNvbm4uY3Vyc29yKCkKY3Vyc29yLmV4ZWN1dGUoIlNFTEVDVCAqIEZST00gdXNlcnMiKQpyb3dzID0gY3Vyc29yLmZldGNoYWxsKCkKcHJpbnQoZiJUb3RhbCB1c2Vyczoge2xlbihyb3dzKX0iKQpmb3Igcm93IGluIHJvd3M6CiAgICBwcmludChmIiAgLSB7cm93Wyd1c2VybmFtZSddfSAocm9sZToge3Jvd1sncm9sZSddfSkiKQpjb25uLmNsb3NlKCk=
