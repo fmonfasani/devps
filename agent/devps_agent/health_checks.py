@@ -274,12 +274,13 @@ async def health_check_loop() -> None:
                             f"Entering extended backoff (2 minutes). Error: {e}",
                         )
                     elif fail_count == 5:
-                        alerting.send_alert(
-                            project_name,
-                            f"Health check failed 5+ times. "
-                            f"Entering long backoff (30 minutes). Manual intervention may be needed. "
-                            f"Error: {e}",
+                        msg = (
+                            "Health check failed 5+ times. "
+                            "Entering long backoff (30 minutes). "
+                            "Manual intervention may be needed. "
+                            f"Error: {e}"
                         )
+                        alerting.send_alert(project_name, msg)
 
         except asyncio.CancelledError:
             break

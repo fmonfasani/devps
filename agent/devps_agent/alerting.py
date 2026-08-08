@@ -2,11 +2,10 @@
 
 import os
 import smtplib
-from email.mime.text import MIMEText
+from contextlib import suppress
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from urllib.request import Request, urlopen
-
-from . import config
 
 
 class AlertError(Exception):
@@ -111,14 +110,10 @@ def send_alert(project_name: str, message: str) -> dict[str, bool]:
     """
     results = {"slack": False, "email": False}
 
-    try:
+    with suppress(AlertError):
         results["slack"] = send_slack_alert(project_name, message)
-    except AlertError:
-        pass
 
-    try:
+    with suppress(AlertError):
         results["email"] = send_email_alert(project_name, message)
-    except AlertError:
-        pass
 
     return results

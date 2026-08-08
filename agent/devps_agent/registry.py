@@ -190,7 +190,13 @@ def list_migrations() -> list[dict[str, Any]]:
 # --- users -------------------------------------------------------------------
 
 
-def create_user(username: str, password_hash: str, password_salt: str, role: str, created_by: str | None = None) -> None:
+def create_user(
+    username: str,
+    password_hash: str,
+    password_salt: str,
+    role: str,
+    created_by: str | None = None,
+) -> None:
     """Create a new user.
 
     Args:
@@ -203,7 +209,8 @@ def create_user(username: str, password_hash: str, password_salt: str, role: str
     ts = _now()
     with connect() as conn:
         conn.execute(
-            """INSERT INTO users (username, password_hash, password_salt, role, created_at, created_by)
+            """INSERT INTO users
+               (username, password_hash, password_salt, role, created_at, created_by)
                VALUES (?, ?, ?, ?, ?, ?)""",
             (username, password_hash, password_salt, role, ts, created_by),
         )
