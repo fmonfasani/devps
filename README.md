@@ -39,6 +39,16 @@ current state:
 Login is the same `DEVPS_TOKEN`, entered once into a form instead of typed
 into a header every time.
 
+**Phase 3b — Health Monitoring & Auto-Recovery (current):**
+
+- Background health checks every 30 seconds
+- Auto-restart of failed containers (rate-limited to 5/hour)
+- Exponential backoff for repeated failures (30s → 2min → 30min)
+- Multi-channel alerting (Slack + Email) on critical failures
+- Dashboard widget showing health status and restart history
+
+See [`HEALTH_MONITORING.md`](HEALTH_MONITORING.md) for configuration.
+
 ## Why this exists
 
 This VPS runs multiple unrelated projects behind one IP (no project gets a
