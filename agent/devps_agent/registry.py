@@ -226,7 +226,9 @@ def get_user(username: str) -> dict[str, Any] | None:
 def list_users() -> list[dict[str, Any]]:
     """List all users (excluding password hashes for security)."""
     with connect() as conn:
-        rows = conn.execute("SELECT username, role, created_at, created_by FROM users ORDER BY username").fetchall()
+        rows = conn.execute(
+            "SELECT username, role, created_at, created_by FROM users ORDER BY username"
+        ).fetchall()
         return [dict(r) for r in rows]
 
 
