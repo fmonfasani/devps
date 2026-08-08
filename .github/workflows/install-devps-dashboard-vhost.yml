@@ -1,0 +1,124 @@
+name: Install devps.webshooks.com vhost + certificate
+
+# One-off. Gives the devps dashboard/API a real public HTTPS domain instead
+# of SSH-tunnel-only access. Mirrors exactly what nginx.py's install_vhost()
+# does for any other devps-managed project — bootstrap HTTP vhost for the
+# ACME challenge, mint the cert, then the full HTTPS vhost proxying to the
+# agent's own port (127.0.0.1:9400). Safe to re-run — idempotent.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  check-dns:
+    name: Confirm DNS has propagated (no SSH)
+    runs-on: ubuntu-latest
+    outputs:
+      resolved: ${{ steps.check.outputs.resolved }}
+    steps:
+      - name: dig devps.webshooks.com
+        id: check
+        run: |
+          ip=$(dig +short devps.webshooks.com A | tail -1)
+          echo "resolved to: ${ip:-<nothing>}"
+          if [ "$ip" = "89.167.96.239" ]; then
+            echo "resolved=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "resolved=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::devps.webshooks.com does not resolve to 89.167.96.239 yet (got: ${ip:-nothing}) — DNS may still be propagating"
+          fi
+
+  install-vhost:
+    name: Write vhost + mint certificate
+    needs: check-dns
+    if: needs.check-dns.outputs.resolved == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH install
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            DOMAIN=devps.webshooks.com
+            PORT=9400
+            WEBROOT=/var/www/certbot
+            AVAILABLE=/etc/nginx/sites-available/$DOMAIN
+            ENABLED=/etc/nginx/sites-enabled/$DOMAIN
+
+            mkdir -p "$WEBROOT"
+
+            if [ ! -d "/etc/letsencrypt/live/$DOMAIN" ]; then
+              echo "===== writing bootstrap (ACME-only) vhost ====="
+              cat > "$AVAILABLE" <<EOF
+            server {
+                listen 80;
+                listen [::]:80;
+                server_name $DOMAIN;
+                location /.well-known/acme-challenge/ {
+                    root $WEBROOT;
+                }
+                location / {
+                    return 404;
+                }
+            }
+            EOF
+              ln -sf "$AVAILABLE" "$ENABLED"
+              nginx -t
+              systemctl reload nginx
+
+              echo "===== requesting certificate ====="
+              certbot certonly --webroot -w "$WEBROOT" -d "$DOMAIN" \
+                --non-interactive --agree-tos --email "${{ secrets.CERTBOT_EMAIL || 'admin@webshooks.com' }}"
+            else
+              echo "certificate already exists for $DOMAIN, skipping certbot"
+            fi
+
+            echo "===== writing full HTTPS vhost ====="
+            cat > "$AVAILABLE" <<EOF
+            server {
+                listen 80;
+                listen [::]:80;
+                server_name $DOMAIN;
+                location /.well-known/acme-challenge/ {
+                    root $WEBROOT;
+                }
+                location / {
+                    return 301 https://\$host\$request_uri;
+                }
+            }
+            server {
+                listen 443 ssl http2;
+                listen [::]:443 ssl http2;
+                server_name $DOMAIN;
+                ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+                ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+                add_header Strict-Transport-Security "max-age=15768000" always;
+                add_header X-Content-Type-Options "nosniff" always;
+                add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+                location / {
+                    proxy_pass http://127.0.0.1:$PORT;
+                    proxy_http_version 1.1;
+                    proxy_set_header Upgrade \$http_upgrade;
+                    proxy_set_header Connection "upgrade";
+                    proxy_set_header Host \$host;
+                    proxy_set_header X-Real-IP \$remote_addr;
+                    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto \$scheme;
+                    proxy_read_timeout 60s;
+                }
+            }
+            EOF
+            ln -sf "$AVAILABLE" "$ENABLED"
+            nginx -t
+            systemctl reload nginx
+
+            echo "===== smoke test ====="
+            curl -s -o /dev/null -w 'https://%{url_effective} -> %{http_code}\n' "https://$DOMAIN/health"
