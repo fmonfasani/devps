@@ -1,0 +1,40 @@
+name: Enable HTTPS-only session cookie
+
+# One-off. bootstrap.sh only writes agent.env if it doesn't already exist,
+# so it won't pick up new config vars added after the first install —
+# append DEVPS_SESSION_HTTPS_ONLY=true by hand and restart. Safe to run
+# only now that devps.webshooks.com has a real certificate (confirmed via
+# verify-devps-domain.yml) — flipping this before HTTPS existed would have
+# meant the dashboard's session cookie never got set at all.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  enable:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH update
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            ENV_FILE=/opt/devps/agent.env
+            if grep -q '^DEVPS_SESSION_HTTPS_ONLY=' "$ENV_FILE" 2>/dev/null; then
+              sed -i 's/^DEVPS_SESSION_HTTPS_ONLY=.*/DEVPS_SESSION_HTTPS_ONLY=true/' "$ENV_FILE"
+            else
+              echo 'DEVPS_SESSION_HTTPS_ONLY=true' >> "$ENV_FILE"
+            fi
+            systemctl restart devps-agent
+            sleep 2
+            systemctl --no-pager --full status devps-agent | head -10
+            echo "===== smoke test ====="
+            curl -sS -o /dev/null -w '%{http_code}\n' --max-time 5 http://127.0.0.1:9400/health
