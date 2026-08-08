@@ -8,7 +8,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from . import auth, config, docker_ops, login_throttle, registry, repo_analysis, secrets_store
+from . import auth, config, docker_ops, login_throttle, rbac, registry, repo_analysis, secrets_store
 from .models import DeployRequest
 from .routers.projects import deploy as deploy_project
 
@@ -34,15 +34,21 @@ def _client_ip(request: Request) -> str:
 
 
 def _authenticated(request: Request) -> bool:
-    return bool(request.session.get("authenticated"))
+    return bool(request.session.get("username"))
+
+
+def _get_user(request: Request) -> dict | None:
+    """Get current authenticated user from session."""
+    username = request.session.get("username")
+    if not username:
+        return None
+    return registry.get_user(username)
 
 
 @router.get("/dashboard/login")
 def login_form(request: Request):
     if _authenticated(request):
         return RedirectResponse("/dashboard", status_code=303)
-    if not config.DASHBOARD_USERNAME or not config.DASHBOARD_PASSWORD_HASH:
-        return RedirectResponse("/dashboard/setup", status_code=303)
     return templates.TemplateResponse(request, "login.html", {"session_authenticated": False})
 
 
@@ -56,19 +62,9 @@ def login_submit(request: Request, username: str = Form(...), password: str = Fo
             {"session_authenticated": False, "error": "Too many attempts — try again later"},
             status_code=429,
         )
-    if not config.DASHBOARD_USERNAME or not config.DASHBOARD_PASSWORD_HASH:
-        return templates.TemplateResponse(
-            request,
-            "login.html",
-            {
-                "session_authenticated": False,
-                "error": "Dashboard credentials not configured",
-            },
-            status_code=503,
-        )
-    if username != config.DASHBOARD_USERNAME or not auth.verify_password(
-        password, config.DASHBOARD_PASSWORD_SALT, config.DASHBOARD_PASSWORD_HASH
-    ):
+
+    user = registry.get_user(username)
+    if not user or not auth.verify_password(password, user["password_salt"], user["password_hash"]):
         login_throttle.record_failure(ip)
         return templates.TemplateResponse(
             request,
@@ -76,14 +72,18 @@ def login_submit(request: Request, username: str = Form(...), password: str = Fo
             {"session_authenticated": False, "error": "Invalid username or password"},
             status_code=401,
         )
+
     login_throttle.record_success(ip)
-    request.session["authenticated"] = True
+    request.session["username"] = username
     return RedirectResponse("/dashboard", status_code=303)
 
 
 @router.get("/dashboard/logout")
 def logout(request: Request):
+    username = request.session.get("username")
     request.session.clear()
+    if username:
+        registry.log_event(None, "dashboard_logout", f"user {username} logged out", success=True)
     return RedirectResponse("/dashboard/login", status_code=303)
 
 
@@ -91,10 +91,21 @@ def logout(request: Request):
 def projects_page(request: Request):
     if not _authenticated(request):
         return RedirectResponse("/dashboard/login", status_code=303)
+
+    user = _get_user(request)
+    if not user:
+        return RedirectResponse("/dashboard/login", status_code=303)
+
+    try:
+        # Show projects based on user role
+        projects = rbac.list_user_projects(user["username"])
+    except rbac.RBACError:
+        projects = []
+
     return templates.TemplateResponse(
         request,
         "projects.html",
-        {"session_authenticated": True, "projects": registry.list_projects()},
+        {"session_authenticated": True, "projects": projects, "user": user},
     )
 
 
@@ -113,6 +124,11 @@ def migrations_page(request: Request):
 def project_detail_page(request: Request, name: str):
     if not _authenticated(request):
         return RedirectResponse("/dashboard/login", status_code=303)
+
+    user = _get_user(request)
+    if not user:
+        return RedirectResponse("/dashboard/login", status_code=303)
+
     project = registry.get_project(name)
     if project is None:
         return templates.TemplateResponse(
@@ -120,14 +136,30 @@ def project_detail_page(request: Request, name: str):
             "projects.html",
             {
                 "session_authenticated": True,
-                "projects": registry.list_projects(),
+                "projects": rbac.list_user_projects(user["username"]),
                 "error": f"{name!r} not found",
+                "user": user,
             },
             status_code=404,
         )
-    logs = docker_ops.container_logs(name, 200) if project["managed_by"] == "devps" else None
 
-    # Get health history (auto-restart events)
+    # Check if user can view this project
+    try:
+        rbac.require_permission(user["username"], "view_project", name)
+    except rbac.RBACError:
+        return templates.TemplateResponse(
+            request,
+            "projects.html",
+            {
+                "session_authenticated": True,
+                "projects": rbac.list_user_projects(user["username"]),
+                "error": f"You don't have permission to view {name!r}",
+                "user": user,
+            },
+            status_code=403,
+        )
+
+    logs = docker_ops.container_logs(name, 200) if project["managed_by"] == "devps" else None
     health_events = [e for e in registry.get_events(name, 100) if e["kind"] == "auto_restart"]
 
     return templates.TemplateResponse(
@@ -140,6 +172,7 @@ def project_detail_page(request: Request, name: str):
             "events": registry.get_events(name, 100),
             "health_events": health_events,
             "logs": logs,
+            "user": user,
         },
     )
 
@@ -148,8 +181,29 @@ def project_detail_page(request: Request, name: str):
 def new_project_form(request: Request):
     if not _authenticated(request):
         return RedirectResponse("/dashboard/login", status_code=303)
+
+    user = _get_user(request)
+    if not user:
+        return RedirectResponse("/dashboard/login", status_code=303)
+
+    # Check if user can create projects
+    try:
+        rbac.require_permission(user["username"], "create_project")
+    except rbac.RBACError:
+        return templates.TemplateResponse(
+            request,
+            "projects.html",
+            {
+                "session_authenticated": True,
+                "projects": rbac.list_user_projects(user["username"]),
+                "error": "You don't have permission to create projects",
+                "user": user,
+            },
+            status_code=403,
+        )
+
     return templates.TemplateResponse(
-        request, "new_project_form.html", {"session_authenticated": True}
+        request, "new_project_form.html", {"session_authenticated": True, "user": user}
     )
 
 
@@ -229,6 +283,26 @@ async def deploy_new_project(
     if not _authenticated(request):
         return RedirectResponse("/dashboard/login", status_code=303)
 
+    user = _get_user(request)
+    if not user:
+        return RedirectResponse("/dashboard/login", status_code=303)
+
+    # Check if user can create projects
+    try:
+        rbac.require_permission(user["username"], "create_project")
+    except rbac.RBACError:
+        return templates.TemplateResponse(
+            request,
+            "projects.html",
+            {
+                "session_authenticated": True,
+                "projects": rbac.list_user_projects(user["username"]),
+                "error": "You don't have permission to create projects",
+                "user": user,
+            },
+            status_code=403,
+        )
+
     try:
         # Parse form data for services and variables
         form_data = await request.form()
@@ -265,16 +339,26 @@ async def deploy_new_project(
         # Call deploy function directly (not through HTTP)
         deploy_project(project_name, deploy_req)
 
+        # Set project owner after deployment
+        from .db import connect
+        with connect() as conn:
+            conn.execute(
+                "UPDATE projects SET owner = ?, created_by = ? WHERE name = ?",
+                (user["username"], user["username"], project_name),
+            )
+
         return RedirectResponse(f"/dashboard/projects/{project_name}", status_code=303)
 
     except Exception as e:
+        user_obj = user if user else {}
         return templates.TemplateResponse(
             request,
             "projects.html",
             {
                 "session_authenticated": True,
-                "projects": registry.list_projects(),
+                "projects": rbac.list_user_projects(user["username"]) if user else [],
                 "error": f"Deploy failed: {e!s}",
+                "user": user_obj,
             },
             status_code=400,
         )
