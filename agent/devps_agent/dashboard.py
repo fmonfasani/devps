@@ -41,6 +41,8 @@ def _authenticated(request: Request) -> bool:
 def login_form(request: Request):
     if _authenticated(request):
         return RedirectResponse("/dashboard", status_code=303)
+    if not config.DASHBOARD_USERNAME or not config.DASHBOARD_PASSWORD_HASH:
+        return RedirectResponse("/dashboard/setup", status_code=303)
     return templates.TemplateResponse(request, "login.html", {"session_authenticated": False})
 
 
@@ -270,4 +272,69 @@ async def deploy_new_project(
                 "error": f"Deploy failed: {e!s}",
             },
             status_code=400,
+        )
+
+
+@router.get("/dashboard/setup")
+def setup_form(request: Request):
+    if config.DASHBOARD_USERNAME and config.DASHBOARD_PASSWORD_HASH:
+        return RedirectResponse("/dashboard/login", status_code=303)
+    return templates.TemplateResponse(
+        request, "setup.html", {"session_authenticated": False}
+    )
+
+
+@router.post("/dashboard/setup")
+def setup_submit(
+    request: Request, username: str = Form(...), password: str = Form(...)
+):
+    if config.DASHBOARD_USERNAME and config.DASHBOARD_PASSWORD_HASH:
+        return RedirectResponse("/dashboard/login", status_code=303)
+
+    if not username or not password:
+        return templates.TemplateResponse(
+            request,
+            "setup.html",
+            {
+                "session_authenticated": False,
+                "error": "Username and password are required",
+            },
+            status_code=400,
+        )
+
+    try:
+        hash_hex, salt_hex = auth.hash_password(password)
+
+        env_file = Path(config.DATA_DIR.parent / "agent.env")
+        env_lines = []
+        if env_file.exists():
+            with open(env_file) as f:
+                env_lines = [
+                    line for line in f.readlines()
+                    if not line.startswith("DEVPS_DASHBOARD_")
+                ]
+
+        with open(env_file, "w") as f:
+            f.writelines(env_lines)
+            f.write(f"DEVPS_DASHBOARD_USERNAME={username}\n")
+            f.write(f"DEVPS_DASHBOARD_PASSWORD_HASH={hash_hex}\n")
+            f.write(f"DEVPS_DASHBOARD_PASSWORD_SALT={salt_hex}\n")
+
+        env_file.chmod(0o600)
+
+        return templates.TemplateResponse(
+            request,
+            "setup.html",
+            {
+                "session_authenticated": False,
+                "success": "Credentials saved! Refresh the page in a few seconds.",
+            },
+        )
+
+    except Exception as e:
+        return templates.TemplateResponse(
+            request,
+            "setup.html",
+            {"session_authenticated": False, "error": f"Setup failed: {e!s}"},
+            status_code=500,
         )
