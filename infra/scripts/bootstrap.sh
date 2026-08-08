@@ -47,6 +47,9 @@ fi
 /opt/devps/venv/bin/pip install -q --upgrade pip
 /opt/devps/venv/bin/pip install -q -e "${REPO_DIR}/agent"
 
+log "running database migrations…"
+bash "${REPO_DIR}/infra/scripts/migrate-db.sh"
+
 log "installing systemd unit…"
 install -m 0644 "${REPO_DIR}/infra/systemd/devps-agent.service" /etc/systemd/system/
 systemctl daemon-reload
