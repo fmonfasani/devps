@@ -8,7 +8,9 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from . import config, docker_ops, registry
+from . import config, docker_ops, registry, repo_analysis, secrets_store
+from .models import DeployRequest
+from .routers.projects import deploy as deploy_project
 
 router = APIRouter(include_in_schema=False)
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -102,3 +104,139 @@ def project_detail_page(request: Request, name: str):
             "logs": logs,
         },
     )
+
+
+@router.get("/dashboard/projects/new")
+def new_project_form(request: Request):
+    if not _authenticated(request):
+        return RedirectResponse("/dashboard/login", status_code=303)
+    return templates.TemplateResponse(
+        request, "new_project_form.html", {"session_authenticated": True}
+    )
+
+
+@router.post("/dashboard/projects/new/analyze")
+def analyze_project(
+    request: Request,
+    project_name: str = Form(...),
+    repo_url: str = Form(...),
+    git_ref: str = Form("main"),
+    compose_file: str = Form("docker-compose.yml"),
+):
+    if not _authenticated(request):
+        return RedirectResponse("/dashboard/login", status_code=303)
+
+    try:
+        repo_dir = repo_analysis.clone_shallow(repo_url, git_ref)
+        compose_path = repo_dir / compose_file
+
+        if not compose_path.exists():
+            return templates.TemplateResponse(
+                request,
+                "new_project_form.html",
+                {
+                    "session_authenticated": True,
+                    "project_name": project_name,
+                    "repo_url": repo_url,
+                    "git_ref": git_ref,
+                    "compose_file": compose_file,
+                    "error": f"{compose_file} not found in repo",
+                },
+                status_code=400,
+            )
+
+        services = repo_analysis.parse_compose_services(compose_path)
+        env_vars = repo_analysis.parse_env_example(repo_dir)
+        classified_vars = repo_analysis.classify_and_generate(env_vars)
+
+        return templates.TemplateResponse(
+            request,
+            "new_project_review.html",
+            {
+                "session_authenticated": True,
+                "project_name": project_name,
+                "repo_url": repo_url,
+                "git_ref": git_ref,
+                "compose_file": compose_file,
+                "services": services,
+                "variables": classified_vars,
+            },
+        )
+    except Exception as e:
+        return templates.TemplateResponse(
+            request,
+            "new_project_form.html",
+            {
+                "session_authenticated": True,
+                "project_name": project_name,
+                "repo_url": repo_url,
+                "git_ref": git_ref,
+                "compose_file": compose_file,
+                "error": f"Failed to analyze repo: {e!s}",
+            },
+            status_code=400,
+        )
+
+
+@router.post("/dashboard/projects/new/deploy")
+async def deploy_new_project(
+    request: Request,
+    project_name: str = Form(...),
+    repo_url: str = Form(...),
+    git_ref: str = Form("main"),
+    compose_file: str = Form("docker-compose.yml"),
+    domain: str = Form(None),
+    primary_service: str = Form(None),
+):
+    if not _authenticated(request):
+        return RedirectResponse("/dashboard/login", status_code=303)
+
+    try:
+        # Parse form data for services and variables
+        form_data = await request.form()
+        services = {}
+        env_vars = {}
+
+        # Extract services (format: service_<name>=<container_port>)
+        for key, value in form_data.items():
+            if key.startswith("service_"):
+                service_name = key[8:]  # Remove "service_" prefix
+                services[service_name] = int(value)
+            elif key.startswith("var_"):
+                var_name = key[4:]  # Remove "var_" prefix
+                if value:  # Only include if not empty
+                    env_vars[var_name] = value
+
+        if not services:
+            raise ValueError("No services specified")
+
+        # Write secrets file
+        env_file_path = secrets_store.write_env_file(project_name, env_vars)
+
+        # Create deploy request
+        deploy_req = DeployRequest(
+            repo_url=repo_url,
+            git_ref=git_ref,
+            compose_file=compose_file,
+            env_file=env_file_path,
+            domain=domain if domain else None,
+            services=services,
+            primary_service=primary_service if primary_service else None,
+        )
+
+        # Call deploy function directly (not through HTTP)
+        deploy_project(project_name, deploy_req)
+
+        return RedirectResponse(f"/dashboard/projects/{project_name}", status_code=303)
+
+    except Exception as e:
+        return templates.TemplateResponse(
+            request,
+            "projects.html",
+            {
+                "session_authenticated": True,
+                "projects": registry.list_projects(),
+                "error": f"Deploy failed: {e!s}",
+            },
+            status_code=400,
+        )

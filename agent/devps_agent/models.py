@@ -9,6 +9,7 @@ class DeployRequest(BaseModel):
     repo_url: str
     git_ref: str = "main"
     compose_file: str = "docker-compose.yml"
+    env_file: str | None = None
     domain: str | None = None
     # service name -> container-internal port, e.g. {"backend": 3001, "frontend": 3000}
     services: dict[str, int]

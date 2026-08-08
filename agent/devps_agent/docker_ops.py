@@ -31,11 +31,18 @@ def clone_or_update(repo_url: str, project_dir: Path, git_ref: str) -> str:
     return run(["git", "rev-parse", "--short", "HEAD"], cwd=project_dir).stdout.strip()
 
 
-def compose_up(project_dir: Path, compose_file: str, env: dict[str, str]) -> str:
+def compose_up(
+    project_dir: Path, compose_file: str, env: dict[str, str], env_file: str | None = None
+) -> str:
     import os
 
+    cmd = ["docker", "compose", "-f", compose_file]
+    if env_file:
+        cmd.extend(["--env-file", env_file])
+    cmd.extend(["up", "-d", "--build"])
+
     result = subprocess.run(
-        ["docker", "compose", "-f", compose_file, "up", "-d", "--build"],
+        cmd,
         cwd=project_dir,
         capture_output=True,
         text=True,

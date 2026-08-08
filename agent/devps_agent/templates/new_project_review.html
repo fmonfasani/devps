@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Review Configuration — devps{% endblock %}
+{% block content %}
+<h1>Review Configuration</h1>
+<p class="muted">Edit detected configuration and fill in required values.</p>
+
+<form method="post" action="/dashboard/projects/new/deploy">
+  <input type="hidden" name="project_name" value="{{ project_name }}">
+  <input type="hidden" name="repo_url" value="{{ repo_url }}">
+  <input type="hidden" name="git_ref" value="{{ git_ref }}">
+  <input type="hidden" name="compose_file" value="{{ compose_file }}">
+
+  <div class="card">
+    <h2>Services</h2>
+    <p class="muted">Container ports detected from docker-compose.yml</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Service</th>
+          <th>Container Port</th>
+          <th>Host Port Variable</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for service_name, service_config in services.items() %}
+        <tr>
+          <td>
+            <input type="hidden" name="service_{{ service_name }}" value="{{ service_config.container_port }}">
+            <strong>{{ service_name }}</strong>
+          </td>
+          <td>{{ service_config.container_port }}</td>
+          <td>
+            {% if service_config.host_port_var %}
+              <code>DEVPS_PORT_{{ service_config.host_port_var }}</code>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if service_config.needs_manual_edit %}
+              <span class="badge badge-unknown">Needs edit</span>
+            {% else %}
+              <span class="badge badge-ok">Ready</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div style="margin-top: 1.5rem;">
+      <label for="primary_service">Primary Service (receives domain)</label>
+      <select id="primary_service" name="primary_service" style="width: 100%; padding: 0.5rem; margin-top: 0.5rem; background: #0f1115; border: 1px solid #262b3a; border-radius: 4px; color: inherit;">
+        <option value="">—</option>
+        {% for service_name in services.keys() %}
+        <option value="{{ service_name }}">{{ service_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div style="margin-top: 1.5rem;">
+      <label for="domain">Domain (optional)</label>
+      <input type="text" id="domain" name="domain" placeholder="example.com" style="width: 100%; padding: 0.5rem; margin-top: 0.5rem; background: #0f1115; border: 1px solid #262b3a; border-radius: 4px; color: inherit;">
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Environment Variables</h2>
+    <p class="muted">Fill in values for external APIs and configuration</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Variable</th>
+          <th>Value</th>
+          <th>Auto-Generated</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for var_name, var_config in variables.items() %}
+        <tr>
+          <td><code>{{ var_name }}</code></td>
+          <td>
+            <input type="text" name="var_{{ var_name }}" value="{{ var_config.value or '' }}" placeholder="{% if var_config.generatable %}[auto-generated]{% else %}[required]{% endif %}" style="width: 100%; padding: 0.5rem; background: #0f1115; border: 1px solid #262b3a; border-radius: 4px; color: inherit;">
+          </td>
+          <td style="text-align: center;">
+            {% if var_config.generatable %}
+              <span class="badge badge-ok">Yes</span>
+            {% else %}
+              <span class="badge badge-unknown">Manual</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="display: flex; gap: 1rem; margin-bottom: 2rem;">
+    <button type="submit">Deploy Project</button>
+    <a href="/dashboard/projects/new" style="padding: 0.5rem 1rem; background: #262b3a; color: #9aa4b2; text-decoration: none; border-radius: 4px; display: inline-block;">Back</a>
+  </div>
+</form>
+
+<style>
+  form input[type=text],
+  form select {
+    font-family: inherit;
+  }
+  form label {
+    display: block; font-weight: 500; font-size: 0.9rem; margin-bottom: 0.5rem;
+  }
+</style>
+{% endblock %}

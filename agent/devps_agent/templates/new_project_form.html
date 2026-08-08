@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}New Project — devps{% endblock %}
+{% block content %}
+<h1>New Project</h1>
+<p class="muted">Let devps auto-detect your deployment configuration.</p>
+
+{% if error %}
+<div class="error">{{ error }}</div>
+{% endif %}
+
+<form method="post" action="/dashboard/projects/new/analyze" class="card" style="max-width: 500px;">
+  <div>
+    <label for="project_name">Project Name</label>
+    <input type="text" id="project_name" name="project_name" value="{{ project_name or '' }}" required>
+  </div>
+
+  <div>
+    <label for="repo_url">Repository URL</label>
+    <input type="text" id="repo_url" name="repo_url" value="{{ repo_url or '' }}" placeholder="https://github.com/user/repo" required>
+  </div>
+
+  <div>
+    <label for="git_ref">Git Ref (branch/tag)</label>
+    <input type="text" id="git_ref" name="git_ref" value="{{ git_ref or 'main' }}">
+  </div>
+
+  <div>
+    <label for="compose_file">Docker Compose File</label>
+    <input type="text" id="compose_file" name="compose_file" value="{{ compose_file or 'docker-compose.yml' }}">
+  </div>
+
+  <button type="submit">Analyze Repository</button>
+</form>
+
+<style>
+  form.card input[type=text] {
+    width: 100%; padding: 0.5rem; margin: 0.5rem 0 1rem;
+    background: #0f1115; border: 1px solid #262b3a; border-radius: 4px; color: inherit;
+  }
+  form.card label {
+    display: block; margin-top: 1rem; margin-bottom: 0.25rem; font-weight: 500; font-size: 0.9rem;
+  }
+  form.card label:first-child {
+    margin-top: 0;
+  }
+</style>
+{% endblock %}
