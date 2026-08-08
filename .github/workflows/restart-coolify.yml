@@ -1,0 +1,68 @@
+name: Restart Coolify (bring its stack back up)
+
+# Manual only. The last investigation found coolify-db/coolify-redis don't
+# exist in `docker ps -a` at all (not even stopped) and nothing listens on
+# :8080 (Coolify's own panel) — Coolify's docker stack appears to be fully
+# down, which explains why zapateria/forrajeria/electronica/tienda.webshooks.com
+# (and possibly other Coolify-managed sites) are returning 502.
+#
+# This locates Coolify's own compose file under /data/coolify and runs
+# `docker compose up -d` there (no --pull, no --remove-orphans — just bring
+# back what's already defined, using images already on disk, nothing new
+# pulled or removed). Then verifies :8080 and the docker-db container come
+# back, and re-checks the 4 store domains.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  restart-coolify:
+    name: Locate + restart Coolify's own stack
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH restart
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
+          script_stop: false
+          script: |
+            echo "===== locating Coolify's compose file(s) ====="
+            find /data/coolify -maxdepth 3 -iname 'docker-compose*.yml' 2>/dev/null | tee /tmp/coolify-compose-files.txt
+            if [ ! -s /tmp/coolify-compose-files.txt ]; then
+              echo "no docker-compose*.yml found under /data/coolify — trying known standard install path"
+              ls -la /data/coolify/source/ 2>/dev/null || echo "/data/coolify/source does not exist either"
+              echo "ABORTING — cannot proceed without knowing where Coolify's compose file is"
+              exit 1
+            fi
+
+            COMPOSE_DIR=$(dirname "$(head -1 /tmp/coolify-compose-files.txt)")
+            echo "===== using compose dir: $COMPOSE_DIR ====="
+            cd "$COMPOSE_DIR"
+            ls -la .
+
+            echo "===== docker compose config check (dry, no changes) ====="
+            docker compose config --services 2>&1 || echo "compose config check failed — will still try up"
+
+            echo "===== docker compose up -d (no pull, no orphan removal) ====="
+            docker compose up -d
+
+            echo "===== waiting 10s for containers to settle ====="
+            sleep 10
+
+            echo "===== docker ps -a after restart ====="
+            docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
+
+            echo "===== is :8080 listening now? ====="
+            ss -tlnp 2>/dev/null | grep ':8080' || echo "still nothing on :8080"
+
+            echo "===== re-checking the 4 store domains locally ====="
+            for p in 31002 31003 31004 31005; do
+              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:$p/" || echo "conn-failed")
+              echo "127.0.0.1:$p -> $code"
+            done
