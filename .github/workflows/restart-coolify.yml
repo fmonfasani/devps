@@ -46,6 +46,9 @@ jobs:
             cd "$COMPOSE_DIR"
             ls -la .
 
+            echo "===== ensure the external 'coolify' network exists ====="
+            docker network inspect coolify >/dev/null 2>&1 && echo "network 'coolify' already exists" || docker network create coolify
+
             echo "===== docker compose config check (dry, no changes) ====="
             docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml config --services 2>&1 || echo "compose config check failed — will still try up"
 
