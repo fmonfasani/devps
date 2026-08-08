@@ -71,7 +71,7 @@ def create_repo(repo_name: str, github_token: str, description: str = "") -> str
 
 
 def init_repo_with_compose(project_dir: Path, project_name: str):
-    """Initialize repo with basic docker-compose.yml and README.
+    r"""Initialize repo with basic docker-compose.yml and README.
 
     Args:
         project_dir: Path to clone directory
