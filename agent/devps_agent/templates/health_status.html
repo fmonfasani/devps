@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Health Status</h1>
+
+<div style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 4px;">
+  <p style="margin: 0; color: #666;">Real-time monitoring of deployed projects. Green = healthy, Red = unhealthy.</p>
+</div>
+
+{% if health_data %}
+<table style="width: 100%; border-collapse: collapse;">
+  <thead>
+    <tr style="background: #2d2d2d; border-bottom: 2px solid #444;">
+      <th style="padding: 12px; text-align: left; color: #aaa;">Project</th>
+      <th style="padding: 12px; text-align: center; color: #aaa;">Health</th>
+      <th style="padding: 12px; text-align: center; color: #aaa;">Status</th>
+      <th style="padding: 12px; text-align: center; color: #aaa;">Restarts (1h)</th>
+      <th style="padding: 12px; text-align: center; color: #aaa;">Last Check</th>
+      <th style="padding: 12px; text-align: center; color: #aaa;">Last Restart</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for project in health_data %}
+    <tr style="border-bottom: 1px solid #444;">
+      <td style="padding: 12px;">
+        <a href="/dashboard/projects/{{ project.project_name }}" style="color: #0d9488; text-decoration: none;">
+          {{ project.project_name }}
+        </a>
+      </td>
+      <td style="padding: 12px; text-align: center;">
+        {% if project.health_status == "running" %}
+          <span style="background: #10b981; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold;">
+            ✓ Running
+          </span>
+        {% elif project.health_status == "dead" %}
+          <span style="background: #ef4444; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold;">
+            ✗ Dead
+          </span>
+        {% elif project.health_status == "unhealthy" %}
+          <span style="background: #f59e0b; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold;">
+            ⚠ Unhealthy
+          </span>
+        {% else %}
+          <span style="background: #6b7280; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px;">
+            ? Unknown
+          </span>
+        {% endif %}
+      </td>
+      <td style="padding: 12px; text-align: center; color: #aaa;">
+        <span style="font-size: 12px;">{{ project.status }}</span>
+      </td>
+      <td style="padding: 12px; text-align: center; color: #aaa;">
+        <span style="font-weight: bold;">{{ project.restart_count }}</span>
+      </td>
+      <td style="padding: 12px; text-align: center; color: #999; font-size: 12px;">
+        {% if project.last_health_check_at %}
+          {{ project.last_health_check_at[:19] }}
+        {% else %}
+          —
+        {% endif %}
+      </td>
+      <td style="padding: 12px; text-align: center; color: #999; font-size: 12px;">
+        {% if project.last_restart_at %}
+          {{ project.last_restart_at[:19] }}
+        {% else %}
+          —
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div style="padding: 40px; text-align: center; color: #666;">
+  <p>No projects deployed yet.</p>
+</div>
+{% endif %}
+
+<style>
+table a:hover {
+  text-decoration: underline;
+}
+</style>
+{% endblock %}

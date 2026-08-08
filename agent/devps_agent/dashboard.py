@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 
 from . import auth, config, docker_ops, login_throttle, rbac, registry, repo_analysis, secrets_store
 from .models import DeployRequest
+from .routers.health_status import list_health
 from .routers.projects import deploy as deploy_project
 
 router = APIRouter(include_in_schema=False)
@@ -114,6 +115,17 @@ def migrations_page(request: Request):
         request,
         "migrations.html",
         {"session_authenticated": True, "migrations": registry.list_migrations()},
+    )
+
+
+@router.get("/dashboard/health")
+def health_status_page(request: Request):
+    if not _authenticated(request):
+        return RedirectResponse("/dashboard/login", status_code=303)
+    return templates.TemplateResponse(
+        request,
+        "health_status.html",
+        {"session_authenticated": True, "health_data": list_health()},
     )
 
 
