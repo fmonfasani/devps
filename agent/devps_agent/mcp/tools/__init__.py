@@ -1,0 +1,36 @@
+"""MCP tool implementations — thin adapters to DEVPS capabilities.
+
+Each tool delegates to existing DEVPS modules (registry, docker_ops, etc).
+No business logic duplication.
+"""
+
+from typing import Dict, Callable, Any
+
+from .projects import register_projects_tools
+
+# Registry of all available tools
+TOOLS: Dict[str, Callable] = {}
+
+
+def register_tool(name: str, handler: Callable) -> None:
+    """Register a tool handler.
+
+    Args:
+        name: Tool name (e.g., "devps.projects.list")
+        handler: Async function that executes the tool
+    """
+    TOOLS[name] = handler
+
+
+def get_tool(name: str) -> Callable | None:
+    """Get tool handler by name."""
+    return TOOLS.get(name)
+
+
+def list_tools() -> list[str]:
+    """Get list of all registered tool names."""
+    return sorted(TOOLS.keys())
+
+
+# Register all tools on module load
+register_projects_tools()
