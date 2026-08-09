@@ -339,17 +339,44 @@ async def stdio_server_loop(server: MCPServer) -> None:
         sys.stdout.flush()
 
 
-def main(authenticated_user: Optional[str] = None) -> None:
-    """Run MCP Server in stdio mode.
+def main(
+    authenticated_user: Optional[str] = None,
+    transport: str = "stdio",
+    port: int = 9500,
+) -> None:
+    """Run MCP Server.
 
     Args:
         authenticated_user: Optional authenticated username for RBAC context
+        transport: "stdio" (local) or "http" (remote)
+        port: Port for HTTP transport
     """
     server = MCPServer(authenticated_user=authenticated_user)
-    asyncio.run(stdio_server_loop(server))
+
+    if transport == "stdio":
+        asyncio.run(stdio_server_loop(server))
+    elif transport == "http":
+        from .transport import HTTPTransport
+        http_transport = HTTPTransport(server, port=port)
+        asyncio.run(http_transport.run())
+    else:
+        raise ValueError(f"Unknown transport: {transport!r}")
 
 
 if __name__ == "__main__":
     import sys
-    authenticated_user = sys.argv[1] if len(sys.argv) > 1 else None
-    main(authenticated_user=authenticated_user)
+    import argparse
+
+    parser = argparse.ArgumentParser(description="DEVPS MCP Server")
+    parser.add_argument("--user", help="Authenticated username")
+    parser.add_argument("--transport", default="stdio", choices=["stdio", "http"],
+                        help="Transport type")
+    parser.add_argument("--port", type=int, default=9500, help="Port for HTTP transport")
+
+    args = parser.parse_args()
+
+    main(
+        authenticated_user=args.user,
+        transport=args.transport,
+        port=args.port,
+    )
