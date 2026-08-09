@@ -170,16 +170,16 @@ This project was auto-created by devps.
 
 ## Development
 
-\`\`\`bash
+```bash
 npm install
 npm run dev
-\`\`\`
+```
 
 ## Docker
 
-\`\`\`bash
+```bash
 docker compose up --build
-\`\`\`
+```
 """
         with open(project_dir / "README.md", "w") as f:
             f.write(readme)
