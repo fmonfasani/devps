@@ -64,6 +64,29 @@ async def _get_project(context: MCPContext, name: str, **kwargs) -> dict[str, An
     }
 
 
+async def _delete_project(context: MCPContext, name: str, **kwargs) -> dict[str, Any]:
+    """Delete a project.
+
+    Delegated from devps.projects.delete to registry.delete_project().
+    Admin only.
+    """
+    # Check permission (admin only)
+    context.require_permission("delete_project")
+
+    # Check project exists
+    project = registry.get_project(name)
+    if not project:
+        raise ValueError(f"Project {name!r} not found")
+
+    # Delete project
+    registry.delete_project(name)
+
+    return {
+        "success": True,
+        "message": f"Project {name!r} deleted",
+    }
+
+
 def register_projects_tools() -> None:
     """Register project management tools."""
     register_tool(
@@ -73,4 +96,8 @@ def register_projects_tools() -> None:
     register_tool(
         "devps.projects.get",
         _get_project,
+    )
+    register_tool(
+        "devps.projects.delete",
+        _delete_project,
     )

@@ -7,6 +7,12 @@ No business logic duplication.
 from typing import Dict, Callable, Any
 
 from .projects import register_projects_tools
+from .containers import register_containers_tools
+from .health import register_health_tools
+from .alerts import register_alerts_tools
+from .events import register_events_tools
+from .migrations import register_migrations_tools
+from .users import register_users_tools
 
 # Registry of all available tools
 TOOLS: Dict[str, Callable] = {}
@@ -34,3 +40,9 @@ def list_tools() -> list[str]:
 
 # Register all tools on module load
 register_projects_tools()
+register_containers_tools()
+register_health_tools()
+register_alerts_tools()
+register_events_tools()
+register_migrations_tools()
+register_users_tools()
