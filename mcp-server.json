@@ -1,0 +1,144 @@
+{
+  "mcp_server_config": {
+    "name": "devps-agent",
+    "version": "1.0.0",
+    "description": "MCP Server exposing AgentOS/devps operational capabilities",
+
+    "server": {
+      "command": "python",
+      "args": ["-m", "devps_agent.mcp_server"],
+      "disabled": false,
+      "auto_start": true
+    },
+
+    "tools": {
+      "category_project_management": [
+        "list_projects",
+        "get_project",
+        "create_project",
+        "restart_project",
+        "stop_project"
+      ],
+      "category_logs_debugging": [
+        "get_logs",
+        "get_events"
+      ],
+      "category_health_monitoring": [
+        "get_health_status",
+        "get_project_health"
+      ],
+      "category_alerts": [
+        "configure_alerts",
+        "mute_alerts"
+      ],
+      "category_users": [
+        "list_users",
+        "create_user",
+        "update_user_role"
+      ],
+      "category_deployments": [
+        "deploy_project",
+        "get_migrations"
+      ]
+    },
+
+    "resources": {
+      "uri_schemes": [
+        "devps://projects",
+        "devps://project/{project_name}",
+        "devps://project/{project_name}/logs",
+        "devps://health"
+      ]
+    },
+
+    "prompts": [
+      "deploy_project",
+      "monitor_health",
+      "view_project_logs"
+    ],
+
+    "capabilities": {
+      "tools": true,
+      "resources": true,
+      "prompts": true,
+      "websocket": false,
+      "persistence": false
+    },
+
+    "authentication": {
+      "method": "none",
+      "note": "Uses devps session authentication through parent FastAPI app"
+    },
+
+    "rate_limiting": {
+      "enabled": false,
+      "note": "Rate limits handled by FastAPI app"
+    },
+
+    "logging": {
+      "level": "INFO",
+      "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    }
+  },
+
+  "client_config": {
+    "description": "Configuration for MCP clients connecting to devps MCP server",
+
+    "claude_code": {
+      "location": ".claudecode/mcp.json",
+      "config": {
+        "mcp_servers": {
+          "devps-agent": {
+            "command": "python",
+            "args": ["-m", "devps_agent.mcp_server"],
+            "disabled": false
+          }
+        }
+      }
+    },
+
+    "custom_python_client": {
+      "example": "from devps_agent.mcp_client import DevpsMCPClient\nimport asyncio\n\nasync def main():\n    async with DevpsMCPClient() as client:\n        projects = await client.list_projects()\n        print(projects)\n\nasyncio.run(main())"
+    },
+
+    "environment": {
+      "DEVPS_MCP_SERVER": "python -m devps_agent.mcp_server",
+      "DEVPS_AGENT_URL": "http://127.0.0.1:9400",
+      "DEVPS_DATA_DIR": "/opt/devps/data",
+      "DEVPS_PROJECTS_DIR": "/opt/devps/projects"
+    }
+  },
+
+  "integrations": [
+    {
+      "name": "Claude Code",
+      "type": "MCP Client",
+      "status": "supported",
+      "docs": "Use mcp_servers section in Claude Code settings"
+    },
+    {
+      "name": "AgentOS Self",
+      "type": "MCP Client",
+      "status": "supported",
+      "example": "devps_agent.mcp_client.DevpsMCPClient"
+    },
+    {
+      "name": "OpenCode",
+      "type": "MCP Client",
+      "status": "planned",
+      "notes": "Support for OpenCode MCP integration planned"
+    },
+    {
+      "name": "Custom Tools",
+      "type": "MCP Client",
+      "status": "supported",
+      "notes": "Any tool can connect via stdio protocol"
+    }
+  ],
+
+  "documentation_links": {
+    "main": "MCP_SERVER.md",
+    "mcp_spec": "https://spec.modelcontextprotocol.io",
+    "examples": "devps_agent/mcp_client.py"
+  }
+}
