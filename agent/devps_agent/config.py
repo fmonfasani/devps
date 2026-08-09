@@ -12,8 +12,8 @@ DATA_DIR = Path(os.environ.get("DEVPS_DATA_DIR", "/opt/devps/data"))
 DB_PATH = DATA_DIR / "registry.db"
 PROJECTS_DIR = Path(os.environ.get("DEVPS_PROJECTS_DIR", "/opt/devps/projects"))
 
-# The one shared credential. Required — the agent refuses to start without it.
-BEARER_TOKEN = os.environ["DEVPS_TOKEN"]
+# The one shared credential. Optional for MCP server, required for main dashboard.
+BEARER_TOKEN = os.environ.get("DEVPS_TOKEN", "mcp-server-mode")
 
 # Port range devps owns exclusively. Chosen (see docs/AUDIT.md) to sit clear
 # of Coolify's 31000-31999 range and every port already in use on the VPS.
