@@ -44,7 +44,7 @@ def generate_token(username: str, expires_in_days: int = 30) -> str:
     Raises:
         ValueError: If user doesn't exist
     """
-    from . import registry
+    from .. import registry
 
     # Verify user exists
     user = registry.get_user(username)
