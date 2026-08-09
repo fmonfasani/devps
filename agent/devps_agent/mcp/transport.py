@@ -148,17 +148,10 @@ class HTTPTransport(Transport):
     async def _validate_token(self, token: str) -> Optional[str]:
         """Validate token and return username.
 
-        Token format: session cookie or MCP-specific JWT.
-        For now, we accept session tokens.
+        Uses MCP token management (devps_mcp_tokens table).
         """
-        # TODO: Implement token validation
-        # Could be:
-        # 1. Session cookie (decode and validate)
-        # 2. JWT (verify signature)
-        # 3. API key (lookup in database)
-
-        # For now, return None (no validation)
-        return None
+        from . import tokens
+        return tokens.validate_token(token)
 
     async def run(self) -> None:
         """Run HTTP transport server."""
